@@ -24,8 +24,27 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.example.flutter_application_2.notes</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>notesapp</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Приложению нужен доступ к календарю, чтобы создавать напоминания по заметкам.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Приложению нужен полный доступ к календарю, чтобы создавать и обновлять напоминания по заметкам.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Доступ к контактам может использоваться системой календаря при работе с событиями.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

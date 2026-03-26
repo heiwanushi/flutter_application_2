@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../../../core/services/calendar_service.dart';
 import '../../../core/utils/note_colors.dart';
 import '../../../data/models/note.dart';
 import '../providers/notes_provider.dart';
@@ -17,12 +19,16 @@ class _NoteState {
   final int? colorIndex;
   final List<String> tags;
   final List<String> imagePaths;
+  final DateTime? eventAt;
+  final int reminderMinutes;
   _NoteState(
     this.title,
     this.content,
     this.colorIndex,
     this.tags,
     this.imagePaths,
+    this.eventAt,
+    this.reminderMinutes,
   );
 }
 
@@ -42,6 +48,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   late List<String> _imagePaths;
   late int? _colorIndex;
   late bool _isPinned;
+  DateTime? _eventAt;
+  int _reminderMinutes = 10;
 
   List<_NoteState> _history = [];
   int _historyIndex = -1;
@@ -59,6 +67,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _imagePaths = List.from(n?.imagePaths ?? []);
     _colorIndex = n?.colorIndex;
     _isPinned = n?.isPinned ?? false;
+    _eventAt = n?.eventAt;
+    _reminderMinutes = n?.reminderMinutes ?? 10;
 
     _recordHistory(immediate: true);
     _titleCtrl.addListener(_onTextChanged);
@@ -80,12 +90,15 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       return _titleCtrl.text.trim().isNotEmpty ||
           _contentCtrl.text.trim().isNotEmpty ||
           _imagePaths.isNotEmpty ||
-          _tags.isNotEmpty;
+          _tags.isNotEmpty ||
+          _eventAt != null;
     }
     return !(_titleCtrl.text.trim() == n.title &&
         _contentCtrl.text.trim() == n.content &&
         _colorIndex == n.colorIndex &&
         _isPinned == n.isPinned &&
+        _eventAt == n.eventAt &&
+        _reminderMinutes == (n.reminderMinutes ?? 10) &&
         listEquals(_tags, n.tags) &&
         listEquals(_imagePaths, n.imagePaths));
   }
@@ -106,11 +119,15 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       _colorIndex,
       List.from(_tags),
       List.from(_imagePaths),
+      _eventAt,
+      _reminderMinutes,
     );
     if (_history.isNotEmpty &&
         _history[_historyIndex].title == newState.title &&
         _history[_historyIndex].content == newState.content &&
         _history[_historyIndex].colorIndex == newState.colorIndex &&
+        _history[_historyIndex].eventAt == newState.eventAt &&
+        _history[_historyIndex].reminderMinutes == newState.reminderMinutes &&
         listEquals(_history[_historyIndex].tags, newState.tags)) {
       return;
     }
@@ -149,6 +166,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _colorIndex = s.colorIndex;
     _tags = List.from(s.tags);
     _imagePaths = List.from(s.imagePaths);
+    _eventAt = s.eventAt;
+    _reminderMinutes = s.reminderMinutes;
     _ignoreHistory = false;
   }
 
@@ -157,29 +176,44 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     final title = _titleCtrl.text.trim();
     final content = _contentCtrl.text.trim();
     final notifier = ref.read(notesProvider.notifier);
+    Note? savedNote;
     if (widget.note == null) {
-      await notifier.add(
+      savedNote = await notifier.add(
         title: title,
         content: content,
         tags: _tags,
         imagePaths: _imagePaths,
         colorIndex: _colorIndex,
         isPinned: _isPinned,
+        eventAt: _eventAt,
+        reminderMinutes: _eventAt == null ? null : _reminderMinutes,
       );
     } else {
       final oldNote = widget.note!;
       // Отдельно синхронизируем только если изменились картинки или основной контент
       final imagedChanged = !listEquals(_imagePaths, oldNote.imagePaths);
-      final contentChanged = title != oldNote.title || content != oldNote.content || !listEquals(_tags, oldNote.tags);
-      
+      final contentChanged =
+          title != oldNote.title ||
+          content != oldNote.content ||
+          !listEquals(_tags, oldNote.tags) ||
+          _eventAt != oldNote.eventAt ||
+          _reminderMinutes != (oldNote.reminderMinutes ?? 10);
+
       if (imagedChanged || contentChanged) {
-        await notifier.editNote(
+        savedNote = await notifier.editNote(
           oldNote.id,
           title: title,
           content: content,
           tags: _tags,
           imagePaths: _imagePaths,
+          eventAt: _eventAt,
+          reminderMinutes: _eventAt == null ? null : _reminderMinutes,
+          calendarEventId: oldNote.calendarEventId,
+          calendarId: oldNote.calendarId,
+          clearEvent: _eventAt == null,
         );
+      } else {
+        savedNote = oldNote;
       }
       // setColor и togglePin обновляют локально, БЕЗ синхронизации картинок
       if (_colorIndex != oldNote.colorIndex) {
@@ -189,6 +223,69 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         await notifier.togglePin(oldNote.id);
       }
     }
+
+    await _syncCalendar(savedNote);
+  }
+
+  Future<void> _syncCalendar(Note? savedNote) async {
+    if (savedNote == null) return;
+
+    final calendarService = ref.read(calendarServiceProvider);
+    final notifier = ref.read(notesProvider.notifier);
+    final oldNote = widget.note;
+
+    try {
+      if (_eventAt == null) {
+        if (oldNote?.calendarEventId != null) {
+          await calendarService.deleteNoteEvent(oldNote!);
+        }
+        return;
+      }
+
+      final syncResult = await calendarService.upsertNoteEvent(savedNote);
+      await notifier.updateCalendarEventMeta(
+        savedNote.id,
+        calendarId: syncResult.calendarId,
+        calendarEventId: syncResult.eventId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _pickEventDateTime() async {
+    final now = DateTime.now();
+    final initial = _eventAt ?? now.add(const Duration(hours: 1));
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 3650)),
+    );
+    if (selectedDate == null || !mounted) return;
+
+    final selectedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (selectedTime == null) return;
+
+    setState(() {
+      _eventAt = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        selectedTime.hour,
+        selectedTime.minute,
+      );
+    });
+    _recordHistory(immediate: true);
+  }
+
+  void _clearEventDateTime() {
+    setState(() => _eventAt = null);
+    _recordHistory(immediate: true);
   }
 
   Future<void> _delete() async {
@@ -333,6 +430,17 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                         border: InputBorder.none,
                       ),
                     ),
+                    _EventSection(
+                      eventAt: _eventAt,
+                      reminderMinutes: _reminderMinutes,
+                      onPickDateTime: _pickEventDateTime,
+                      onClear: _eventAt == null ? null : _clearEventDateTime,
+                      onReminderChanged: (value) {
+                        setState(() => _reminderMinutes = value);
+                        _recordHistory(immediate: true);
+                      },
+                    ),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: _contentCtrl,
                       maxLines: null,
@@ -494,6 +602,125 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       setState(() => _tags.add(tag));
       _tagCtrl.clear();
     }
+  }
+}
+
+class _EventSection extends StatelessWidget {
+  final DateTime? eventAt;
+  final int reminderMinutes;
+  final VoidCallback onPickDateTime;
+  final VoidCallback? onClear;
+  final ValueChanged<int> onReminderChanged;
+
+  const _EventSection({
+    required this.eventAt,
+    required this.reminderMinutes,
+    required this.onPickDateTime,
+    required this.onClear,
+    required this.onReminderChanged,
+  });
+
+  static const _reminderOptions = <int>[5, 10, 15, 30, 60, 180, 1440];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final formattedDate = eventAt == null
+        ? 'Не выбрано'
+        : DateFormat('dd.MM.yyyy, HH:mm').format(eventAt!);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.event_outlined, size: 18, color: scheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Событие и напоминание',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (onClear != null)
+                IconButton(
+                  onPressed: onClear,
+                  tooltip: 'Убрать событие',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onPickDateTime,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: scheme.outlineVariant.withValues(alpha: 0.45),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule_rounded, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      formattedDate,
+                      style: tt.bodyMedium?.copyWith(
+                        fontWeight: eventAt == null
+                            ? FontWeight.w400
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (eventAt != null) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: reminderMinutes,
+              decoration: const InputDecoration(
+                labelText: 'Напомнить',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: _reminderOptions
+                  .map(
+                    (minutes) => DropdownMenuItem(
+                      value: minutes,
+                      child: Text(_reminderLabel(minutes)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) onReminderChanged(value);
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _reminderLabel(int minutes) {
+    if (minutes < 60) return 'За $minutes мин';
+    if (minutes < 1440) return 'За ${minutes ~/ 60} ч';
+    return 'За ${minutes ~/ 1440} д';
   }
 }
 

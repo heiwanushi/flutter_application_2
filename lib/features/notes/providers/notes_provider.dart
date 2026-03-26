@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../data/models/note.dart';
@@ -5,6 +6,7 @@ import '../../../data/repositories/notes_repository.dart';
 import '../../../data/repositories/firestore_repository.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/calendar_service.dart';
 import '../../../core/services/sync_service.dart'; // Импорт
 
 final notesRepositoryProvider = Provider((_) => NotesRepository());
@@ -90,8 +92,12 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       final remoteFirestore = FirestoreRepository(uid);
 
       // 1. Загружаем только локальные картинки (не ссылки) в Supabase и получаем ссылки
-      final localImages = note.imagePaths.where((img) => !img.startsWith('http')).toList();
-      final remoteImages = note.imagePaths.where((img) => img.startsWith('http')).toList();
+      final localImages = note.imagePaths
+          .where((img) => !img.startsWith('http'))
+          .toList();
+      final remoteImages = note.imagePaths
+          .where((img) => img.startsWith('http'))
+          .toList();
       final uploadedUrls = await syncService.uploadImages(localImages);
       // Собираем итоговый список: уже существующие ссылки + новые загруженные
       // Если картинка не загрузилась (пустая строка), оставляем локальный путь
@@ -100,7 +106,10 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
         for (int i = 0; i < uploadedUrls.length; i++)
           uploadedUrls[i].isNotEmpty ? uploadedUrls[i] : localImages[i],
       ];
-      final syncedNote = note.copyWith(imagePaths: filteredUrls, isNoteSynced: true);
+      final syncedNote = note.copyWith(
+        imagePaths: filteredUrls,
+        isNoteSynced: true,
+      );
 
       // 2. Обновляем заметку в Firestore (теперь там ссылки https://...)
       await remoteFirestore.upsertNote(syncedNote);
@@ -114,17 +123,21 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       state = AsyncData(newList);
       await _localRepo.saveAll(newList);
     } catch (e) {
-      print('Ошибка фоновой синхронизации: $e');
+      debugPrint('Ошибка фоновой синхронизации: $e');
     }
   }
 
-  Future<void> add({
+  Future<Note> add({
     required String title,
     required String content,
     required List<String> tags,
     List<String> imagePaths = const [],
     int? colorIndex,
     bool isPinned = false,
+    DateTime? eventAt,
+    int? reminderMinutes,
+    String? calendarEventId,
+    String? calendarId,
   }) async {
     final note = Note(
       id: _uuid.v4(),
@@ -137,26 +150,38 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       colorIndex: colorIndex,
       isPinned: isPinned,
       isNoteSynced: false,
+      eventAt: eventAt,
+      reminderMinutes: reminderMinutes,
+      calendarEventId: calendarEventId,
+      calendarId: calendarId,
     );
     final notes = <Note>[...(state.value ?? <Note>[]), note];
     await _persist(notes, noteToSync: note);
+    return note;
   }
 
-  Future<void> editNote(
+  Future<Note?> editNote(
     String id, {
     required String title,
     required String content,
     required List<String> tags,
     required List<String> imagePaths,
+    DateTime? eventAt,
+    int? reminderMinutes,
+    String? calendarEventId,
+    String? calendarId,
+    bool clearEvent = false,
   }) async {
     Note? updatedNote;
     final currentNotes = state.value ?? <Note>[];
     final oldNote = currentNotes.where((n) => n.id == id).isNotEmpty
-      ? currentNotes.firstWhere((n) => n.id == id)
-      : null;
+        ? currentNotes.firstWhere((n) => n.id == id)
+        : null;
     // Если были удалены картинки, удаляем их из Supabase
     if (oldNote != null) {
-      final removedImages = oldNote.imagePaths.where((img) => !imagePaths.contains(img)).toList();
+      final removedImages = oldNote.imagePaths
+          .where((img) => !imagePaths.contains(img))
+          .toList();
       final user = ref.read(authStateProvider).value;
       if (removedImages.isNotEmpty && user != null) {
         final syncService = SyncService(user.uid);
@@ -174,6 +199,11 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
               imagePaths: imagePaths,
               updatedAt: DateTime.now(),
               isNoteSynced: false,
+              eventAt: eventAt,
+              reminderMinutes: reminderMinutes,
+              calendarEventId: calendarEventId,
+              calendarId: calendarId,
+              clearEvent: clearEvent,
             );
             return updatedNote!;
           })()
@@ -181,6 +211,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
           n,
     ];
     if (updatedNote != null) await _persist(notes, noteToSync: updatedNote);
+    return updatedNote;
   }
 
   Future<void> delete(String id) async {
@@ -193,6 +224,11 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     if (noteToDelete != null && user != null) {
       final syncService = SyncService(user.uid);
       await syncService.deleteImagesByUrls(noteToDelete.imagePaths);
+    }
+    if (noteToDelete != null) {
+      try {
+        await ref.read(calendarServiceProvider).deleteNoteEvent(noteToDelete);
+      } catch (_) {}
     }
     final notes = <Note>[
       for (final n in currentNotes)
@@ -215,6 +251,13 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       }
       await syncService.deleteImagesByUrls(imagesToDelete);
     }
+    for (final note in currentNotes) {
+      if (ids.contains(note.id)) {
+        try {
+          await ref.read(calendarServiceProvider).deleteNoteEvent(note);
+        } catch (_) {}
+      }
+    }
     final notes = <Note>[
       for (final n in currentNotes)
         if (!ids.contains(n.id)) n,
@@ -228,7 +271,10 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       for (final n in state.value ?? <Note>[])
         if (n.id == id)
           (() {
-            updatedNote = n.copyWith(isPinned: !n.isPinned, isNoteSynced: false);
+            updatedNote = n.copyWith(
+              isPinned: !n.isPinned,
+              isNoteSynced: false,
+            );
             return updatedNote!;
           })()
         else
@@ -308,6 +354,23 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       }
     }
   }
+
+  Future<void> updateCalendarEventMeta(
+    String id, {
+    required String calendarId,
+    required String calendarEventId,
+  }) async {
+    final notes = <Note>[
+      for (final n in state.value ?? <Note>[])
+        if (n.id == id)
+          n.copyWith(calendarId: calendarId, calendarEventId: calendarEventId)
+        else
+          n,
+    ];
+
+    state = AsyncData(notes);
+    await _localRepo.saveAll(notes);
+  }
 }
 
 // --- Провайдеры настроек (ViewMode, SortMode и т.д.) ---
@@ -367,8 +430,23 @@ final selectedTagProvider = StateProvider<String?>((_) => null);
 final allTagsProvider = Provider<List<String>>((ref) {
   final notes = ref.watch(notesProvider).value ?? <Note>[];
   final tags = <String>{};
-  for (final n in notes) tags.addAll(n.tags);
+  for (final n in notes) {
+    tags.addAll(n.tags);
+  }
   return tags.toList()..sort();
+});
+
+final tagCountsProvider = Provider<Map<String, int>>((ref) {
+  final notes = ref.watch(notesProvider).value ?? <Note>[];
+  final counts = <String, int>{};
+
+  for (final note in notes) {
+    for (final tag in note.tags) {
+      counts[tag] = (counts[tag] ?? 0) + 1;
+    }
+  }
+
+  return counts;
 });
 
 final filteredNotesProvider = Provider<AsyncValue<List<Note>>>((ref) {
