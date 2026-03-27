@@ -12,6 +12,7 @@ import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/note_deep_links.dart';
 import 'data/models/note.dart';
+import 'features/notes/providers/notes_filters_provider.dart';
 import 'features/notes/providers/notes_provider.dart';
 import 'features/notes/screens/note_editor_screen.dart';
 import 'firebase_options.dart';

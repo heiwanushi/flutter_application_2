@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/utils/note_colors.dart';
 import '../../../data/models/note.dart';
+import '../providers/notes_filters_provider.dart';
 import '../providers/notes_provider.dart';
 import '../widgets/event_note_cards.dart';
 import '../widgets/note_card.dart';

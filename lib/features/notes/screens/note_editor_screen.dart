@@ -1,19 +1,23 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
+
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/services/calendar_service.dart';
 import '../../../core/utils/note_colors.dart';
 import '../../../data/models/note.dart';
+
 import '../providers/notes_provider.dart';
+import '../widgets/editor/editor_event_section.dart';
+import '../widgets/editor/editor_gallery.dart';
+import '../widgets/editor/editor_toolbar.dart';
 
 class _NoteState {
   final String title;
@@ -324,16 +328,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
-  void _openImageViewer(int index) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            _ImageViewerScreen(paths: _imagePaths, initialIndex: index),
-      ),
-    );
-  }
-
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final dir = await getApplicationDocumentsDirectory();
@@ -455,9 +449,36 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildToolBar(scheme, tt),
+                EditorToolbar(
+                  tags: _tags,
+                  tagCtrl: _tagCtrl,
+                  colorIndex: _colorIndex,
+                  onAddTag: (val) {
+                    _addTag(val);
+                    _recordHistory(immediate: true);
+                  },
+                  onRemoveTag: (t) {
+                    setState(() => _tags.remove(t));
+                    _recordHistory(immediate: true);
+                  },
+                  onColorChanged: (idx) {
+                    setState(() => _colorIndex = idx);
+                    _recordHistory(immediate: true);
+                  },
+                  scheme: scheme,
+                  tt: tt,
+                ),
                 const SizedBox(height: 18),
-                _buildImageGallery(scheme, tt),
+                EditorGallery(
+                  imagePaths: _imagePaths,
+                  onPickImage: _pickImage,
+                  onRemoveImage: (index) {
+                    setState(() => _imagePaths.removeAt(index));
+                    _recordHistory(immediate: true);
+                  },
+                  scheme: scheme,
+                  tt: tt,
+                ),
                 TextField(
                   controller: _titleCtrl,
                   style: tt.headlineSmall?.copyWith(
@@ -474,7 +495,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _EventSection(
+                EditorEventSection(
                   eventAt: _eventAt,
                   reminderMinutes: _reminderMinutes,
                   onPickDateTime: _pickEventDateTime,
@@ -501,465 +522,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildToolBar(ColorScheme scheme, TextTheme tt) {
-    final brightness = Theme.of(context).brightness;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.35),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Оформление',
-            style: tt.labelLarge?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: NoteColors.count + 1,
-              itemBuilder: (context, i) {
-                final isSelected = i == 0
-                    ? _colorIndex == null
-                    : _colorIndex == i - 1;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () {
-                      setState(() => _colorIndex = i == 0 ? null : i - 1);
-                      _recordHistory(immediate: true);
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: i == 0
-                            ? scheme.surfaceContainerHighest
-                            : NoteColors.bg(i - 1, brightness),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected
-                              ? scheme.primary
-                              : scheme.outlineVariant.withValues(alpha: 0.32),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: isSelected
-                          ? Icon(
-                              i == 0
-                                  ? Icons.format_color_reset_rounded
-                                  : Icons.check_rounded,
-                              size: 18,
-                              color: scheme.primary,
-                            )
-                          : null,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Теги',
-            style: tt.labelLarge?.copyWith(
-              color: scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ..._tags.map(
-                (t) => InputChip(
-                  label: Text(t, style: const TextStyle(fontSize: 12)),
-                  onDeleted: () {
-                    setState(() => _tags.remove(t));
-                    _recordHistory(immediate: true);
-                  },
-                  backgroundColor: scheme.secondaryContainer.withValues(
-                    alpha: 0.32,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 136,
-                child: TextField(
-                  controller: _tagCtrl,
-                  style: tt.bodySmall,
-                  decoration: InputDecoration(
-                    hintText: 'Добавить тег',
-                    hintStyle: TextStyle(color: scheme.onSurfaceVariant),
-                    filled: true,
-                    fillColor: scheme.surfaceContainerLow,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onSubmitted: (val) {
-                    _addTag(val);
-                    _recordHistory(immediate: true);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageGallery(ColorScheme scheme, TextTheme tt) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Фото',
-            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 180,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _imagePaths.length + 1,
-              separatorBuilder: (context, index) => const SizedBox(width: 12),
-              itemBuilder: (ctx, i) {
-                if (i == 0) {
-                  return _AddPhotoCard(scheme: scheme, onTap: _pickImage);
-                }
-                final imageIndex = i - 1;
-                return _ImageThumb(
-                  path: _imagePaths[imageIndex],
-                  onRemove: () {
-                    setState(() => _imagePaths.removeAt(imageIndex));
-                    _recordHistory(immediate: true);
-                  },
-                  onTap: () => _openImageViewer(imageIndex),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddPhotoCard extends StatelessWidget {
-  final ColorScheme scheme;
-  final VoidCallback onTap;
-
-  const _AddPhotoCard({required this.scheme, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          width: 84,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.45),
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.add_photo_alternate_outlined,
-                color: scheme.primary,
-                size: 26,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EventSection extends StatelessWidget {
-  final DateTime? eventAt;
-  final int reminderMinutes;
-  final VoidCallback onPickDateTime;
-  final VoidCallback? onClear;
-  final ValueChanged<int> onReminderChanged;
-
-  const _EventSection({
-    required this.eventAt,
-    required this.reminderMinutes,
-    required this.onPickDateTime,
-    required this.onClear,
-    required this.onReminderChanged,
-  });
-
-  static const _reminderOptions = <int>[5, 10, 15, 30, 60, 180, 1440];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final formattedDate = eventAt == null
-        ? 'Дата и время не выбраны'
-        : DateFormat('dd.MM.yyyy, HH:mm').format(eventAt!);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.event_outlined, size: 18, color: scheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Событие и напоминание',
-                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ),
-              if (onClear != null)
-                IconButton(
-                  onPressed: onClear,
-                  tooltip: 'Убрать событие',
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onPickDateTime,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: scheme.outlineVariant.withValues(alpha: 0.45),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.schedule_rounded, color: scheme.onSurfaceVariant),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      formattedDate,
-                      style: tt.bodyMedium?.copyWith(
-                        fontWeight: eventAt == null
-                            ? FontWeight.w400
-                            : FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (eventAt != null) ...[
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              initialValue: reminderMinutes,
-              decoration: InputDecoration(
-                labelText: 'Напомнить',
-                filled: true,
-                fillColor: scheme.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                    color: scheme.outlineVariant.withValues(alpha: 0.45),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(
-                    color: scheme.outlineVariant.withValues(alpha: 0.45),
-                  ),
-                ),
-                isDense: true,
-              ),
-              items: _reminderOptions
-                  .map(
-                    (minutes) => DropdownMenuItem(
-                      value: minutes,
-                      child: Text(_reminderLabel(minutes)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) onReminderChanged(value);
-              },
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _reminderLabel(int minutes) {
-    if (minutes < 60) return 'За $minutes мин';
-    if (minutes < 1440) return 'За ${minutes ~/ 60} ч';
-    return 'За ${minutes ~/ 1440} д';
-  }
-}
-
-class _ImageThumb extends StatelessWidget {
-  final String path;
-  final VoidCallback onRemove;
-  final VoidCallback onTap;
-
-  const _ImageThumb({
-    required this.path,
-    required this.onRemove,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget imageWidget;
-    if (path.startsWith('http')) {
-      imageWidget = CachedNetworkImage(
-        imageUrl: path,
-        height: 180,
-        fit: BoxFit.cover,
-        placeholder: (ctx, url) => Container(
-          height: 180,
-          color: Colors.black12,
-          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-        ),
-        errorWidget: (ctx, url, error) => const SizedBox.shrink(),
-      );
-    } else {
-      imageWidget = Image.file(
-        File(path),
-        height: 180,
-        fit: BoxFit.cover,
-        cacheHeight: 400,
-      );
-    }
-
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          children: [
-            imageWidget,
-            Positioned(
-              top: 8,
-              right: 8,
-              child: GestureDetector(
-                onTap: onRemove,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Colors.black45,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.close, size: 16, color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ImageViewerScreen extends StatefulWidget {
-  final List<String> paths;
-  final int initialIndex;
-
-  const _ImageViewerScreen({required this.paths, required this.initialIndex});
-
-  @override
-  State<_ImageViewerScreen> createState() => _ImageViewerScreenState();
-}
-
-class _ImageViewerScreenState extends State<_ImageViewerScreen> {
-  late PageController _pageCtrl;
-  late int _current;
-
-  @override
-  void initState() {
-    super.initState();
-    _current = widget.initialIndex;
-    _pageCtrl = PageController(initialPage: widget.initialIndex);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text('${_current + 1} / ${widget.paths.length}'),
-      ),
-      body: PageView.builder(
-        controller: _pageCtrl,
-        itemCount: widget.paths.length,
-        onPageChanged: (v) => setState(() => _current = v),
-        itemBuilder: (ctx, i) {
-          final path = widget.paths[i];
-          Widget imageWidget;
-          if (path.startsWith('http')) {
-            imageWidget = CachedNetworkImage(
-              imageUrl: path,
-              placeholder: (ctx, url) => const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              errorWidget: (ctx, url, error) => const Icon(
-                Icons.broken_image,
-                color: Colors.white38,
-                size: 64,
-              ),
-            );
-          } else {
-            imageWidget = Image.file(File(path));
-          }
-          return InteractiveViewer(child: Center(child: imageWidget));
-        },
       ),
     );
   }

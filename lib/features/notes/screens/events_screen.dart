@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/note.dart';
-import '../providers/notes_provider.dart';
+import '../providers/notes_filters_provider.dart';
+
 import '../widgets/event_note_cards.dart';
 import 'note_editor_screen.dart';
 
