@@ -478,3 +478,11 @@ final filteredNotesProvider = Provider<AsyncValue<List<Note>>>((ref) {
     return result;
   });
 });
+
+final reminderNotesProvider = Provider<AsyncValue<List<Note>>>((ref) {
+  return ref.watch(notesProvider).whenData((notes) {
+    final reminders = notes.where((note) => note.eventAt != null).toList();
+    reminders.sort((a, b) => a.eventAt!.compareTo(b.eventAt!));
+    return reminders;
+  });
+});

@@ -5,6 +5,7 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/services/settings_service.dart';
@@ -20,6 +21,7 @@ final appNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ru');
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
@@ -36,6 +38,7 @@ void main() async {
   final viewIndex = await settings.loadViewMode();
   final sortIndex = await settings.loadSortMode();
   final sortAsc = await settings.loadSortAsc();
+  final accentColor = await settings.loadAccentColor();
 
   container.read(themeModeProvider.notifier).state =
       ThemeMode.values[themeIndex];
@@ -46,6 +49,7 @@ void main() async {
       .read(sortModeProvider.notifier)
       .setInitial(SortMode.values[sortIndex]);
   container.read(sortAscProvider.notifier).setInitial(sortAsc);
+  container.read(accentColorProvider.notifier).state = accentColor;
 
   runApp(UncontrolledProviderScope(container: container, child: const App()));
 }
@@ -111,17 +115,33 @@ class _AppState extends ConsumerState<App> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
+    final accentColorValue = ref.watch(accentColorProvider);
 
     return DynamicColorBuilder(
-      builder: (lightDynamic, darkDynamic) => MaterialApp(
-        navigatorKey: appNavigatorKey,
-        title: 'Заметки',
-        theme: AppTheme.light(lightDynamic),
-        darkTheme: AppTheme.dark(darkDynamic),
-        themeMode: themeMode,
-        home: const MainScreen(),
-        debugShowCheckedModeBanner: false,
-      ),
+      builder: (lightDynamic, darkDynamic) {
+        final accentColor = accentColorValue == null
+            ? null
+            : Color(accentColorValue);
+        final lightScheme = accentColor == null
+            ? lightDynamic
+            : ColorScheme.fromSeed(seedColor: accentColor);
+        final darkScheme = accentColor == null
+            ? darkDynamic
+            : ColorScheme.fromSeed(
+                seedColor: accentColor,
+                brightness: Brightness.dark,
+              );
+
+        return MaterialApp(
+          navigatorKey: appNavigatorKey,
+          title: 'Заметки',
+          theme: AppTheme.light(lightScheme),
+          darkTheme: AppTheme.dark(darkScheme),
+          themeMode: themeMode,
+          home: const MainScreen(),
+          debugShowCheckedModeBanner: false,
+        );
+      },
     );
   }
 }

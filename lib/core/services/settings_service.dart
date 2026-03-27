@@ -4,14 +4,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 final settingsServiceProvider = Provider((ref) => SettingsService());
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
+final accentColorProvider = StateProvider<int?>((ref) => null);
 
 class SettingsService {
   static const _themeKey = 'theme_index';
   static const _viewModeKey = 'view_mode_index';
   static const _sortModeKey = 'sort_mode_index';
   static const _sortAscKey = 'sort_asc_bool';
+  static const _accentColorKey = 'accent_color_value';
 
-  // Тема
   Future<void> saveThemeIndex(int index) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_themeKey, index);
@@ -22,7 +23,6 @@ class SettingsService {
     return prefs.getInt(_themeKey) ?? ThemeMode.system.index;
   }
 
-  // Вид (Сетка/Список)
   Future<void> saveViewMode(int index) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_viewModeKey, index);
@@ -30,10 +30,9 @@ class SettingsService {
 
   Future<int> loadViewMode() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_viewModeKey) ?? 0; // По умолчанию сетка
+    return prefs.getInt(_viewModeKey) ?? 0;
   }
 
-  // Режим сортировки
   Future<void> saveSortMode(int index) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_sortModeKey, index);
@@ -41,10 +40,9 @@ class SettingsService {
 
   Future<int> loadSortMode() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_sortModeKey) ?? 0; // По умолчанию по обновлению
+    return prefs.getInt(_sortModeKey) ?? 0;
   }
 
-  // Порядок сортировки
   Future<void> saveSortAsc(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_sortAscKey, value);
@@ -52,6 +50,20 @@ class SettingsService {
 
   Future<bool> loadSortAsc() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_sortAscKey) ?? false; // По умолчанию убывание
+    return prefs.getBool(_sortAscKey) ?? false;
+  }
+
+  Future<void> saveAccentColor(int? value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value == null) {
+      await prefs.remove(_accentColorKey);
+      return;
+    }
+    await prefs.setInt(_accentColorKey, value);
+  }
+
+  Future<int?> loadAccentColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_accentColorKey);
   }
 }
