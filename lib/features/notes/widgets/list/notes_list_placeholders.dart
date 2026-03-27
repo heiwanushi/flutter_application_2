@@ -17,29 +17,13 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              '$count',
-              style: tt.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        count > 0 ? '$title ($count)' : title,
+        style: tt.titleMedium?.copyWith(
+          color: scheme.primary,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

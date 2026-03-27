@@ -6,11 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/services/calendar_service.dart';
+import '../../../core/services/gemini_service.dart';
 import '../../../core/utils/note_colors.dart';
 import '../../../data/models/note.dart';
 
@@ -58,6 +60,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   late bool _isPinned;
   DateTime? _eventAt;
   int _reminderMinutes = 10;
+  bool _isAIProcessing = false;
+  bool _canPop = false;
+  bool _isSaving = false;
 
   List<_NoteState> _history = [];
   int _historyIndex = -1;
@@ -183,67 +188,71 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   }
 
   Future<void> _save() async {
-    if (!_hasChanges()) return;
+    if (_isSaving || !_hasChanges()) return;
+    _isSaving = true;
 
     final title = _titleCtrl.text.trim();
     final content = _contentCtrl.text.trim();
     final notifier = ref.read(notesProvider.notifier);
+    final calendarService = ref.read(calendarServiceProvider);
     Note? savedNote;
 
-    if (widget.note == null) {
-      savedNote = await notifier.add(
-        title: title,
-        content: content,
-        tags: _tags,
-        imagePaths: _imagePaths,
-        colorIndex: _colorIndex,
-        isPinned: _isPinned,
-        eventAt: _eventAt,
-        reminderMinutes: _eventAt == null ? null : _reminderMinutes,
-      );
-    } else {
-      final oldNote = widget.note!;
-      final imageChanged = !listEquals(_imagePaths, oldNote.imagePaths);
-      final contentChanged =
-          title != oldNote.title ||
-          content != oldNote.content ||
-          !listEquals(_tags, oldNote.tags) ||
-          _eventAt != oldNote.eventAt ||
-          _reminderMinutes != (oldNote.reminderMinutes ?? 10);
-
-      if (imageChanged || contentChanged) {
-        savedNote = await notifier.editNote(
-          oldNote.id,
+    try {
+      if (widget.note == null) {
+        savedNote = await notifier.add(
           title: title,
           content: content,
           tags: _tags,
           imagePaths: _imagePaths,
+          colorIndex: _colorIndex,
+          isPinned: _isPinned,
           eventAt: _eventAt,
           reminderMinutes: _eventAt == null ? null : _reminderMinutes,
-          calendarEventId: oldNote.calendarEventId,
-          calendarId: oldNote.calendarId,
-          clearEvent: _eventAt == null,
         );
       } else {
-        savedNote = oldNote;
+        final oldNote = widget.note!;
+        final imageChanged = !listEquals(_imagePaths, oldNote.imagePaths);
+        final contentChanged =
+            title != oldNote.title ||
+            content != oldNote.content ||
+            !listEquals(_tags, oldNote.tags) ||
+            _eventAt != oldNote.eventAt ||
+            _reminderMinutes != (oldNote.reminderMinutes ?? 10);
+
+        if (imageChanged || contentChanged) {
+          savedNote = await notifier.editNote(
+            oldNote.id,
+            title: title,
+            content: content,
+            tags: _tags,
+            imagePaths: _imagePaths,
+            eventAt: _eventAt,
+            reminderMinutes: _eventAt == null ? null : _reminderMinutes,
+            calendarEventId: oldNote.calendarEventId,
+            calendarId: oldNote.calendarId,
+            clearEvent: _eventAt == null,
+          );
+        } else {
+          savedNote = oldNote;
+        }
+
+        if (_colorIndex != oldNote.colorIndex) {
+          await notifier.setColor(oldNote.id, _colorIndex);
+        }
+        if (_isPinned != oldNote.isPinned) {
+          await notifier.togglePin(oldNote.id);
+        }
       }
 
-      if (_colorIndex != oldNote.colorIndex) {
-        await notifier.setColor(oldNote.id, _colorIndex);
+      if (savedNote != null) {
+        await _syncCalendar(savedNote, calendarService, notifier);
       }
-      if (_isPinned != oldNote.isPinned) {
-        await notifier.togglePin(oldNote.id);
-      }
+    } finally {
+      if (mounted) _isSaving = false;
     }
-
-    await _syncCalendar(savedNote);
   }
 
-  Future<void> _syncCalendar(Note? savedNote) async {
-    if (savedNote == null) return;
-
-    final calendarService = ref.read(calendarServiceProvider);
-    final notifier = ref.read(notesProvider.notifier);
+  Future<void> _syncCalendar(Note savedNote, CalendarService calendarService, NotesNotifier notifier) async {
     final oldNote = widget.note;
 
     try {
@@ -323,9 +332,102 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
 
     if (confirm == true && mounted) {
       _ignoreHistory = true;
+      _isSaving = true;
       ref.read(notesProvider.notifier).delete(widget.note!.id);
-      Navigator.of(context).pop();
+      setState(() => _canPop = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop();
+      });
     }
+  }
+
+  void _showSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        final tt = Theme.of(context).textTheme;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: scheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+              insetPadding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Параметры заметки',
+                      style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 24),
+                    EditorToolbar(
+                      tags: _tags,
+                      tagCtrl: _tagCtrl,
+                      colorIndex: _colorIndex,
+                      onAddTag: (val) {
+                        _addTag(val);
+                        _recordHistory(immediate: true);
+                        setDialogState(() {});
+                        if (mounted) setState(() {});
+                      },
+                      onRemoveTag: (t) {
+                        _tags.remove(t);
+                        _recordHistory(immediate: true);
+                        setDialogState(() {});
+                        if (mounted) setState(() {});
+                      },
+                      onColorChanged: (idx) {
+                        _colorIndex = idx;
+                        _recordHistory(immediate: true);
+                        setDialogState(() {});
+                        if (mounted) setState(() {});
+                      },
+                      scheme: scheme,
+                      tt: tt,
+                    ),
+                    const SizedBox(height: 16),
+                    EditorEventSection(
+                      eventAt: _eventAt,
+                      reminderMinutes: _reminderMinutes,
+                      onPickDateTime: () async {
+                        await _pickEventDateTime();
+                        setDialogState(() {});
+                        if (mounted) setState(() {});
+                      },
+                      onClear: _eventAt == null
+                          ? null
+                          : () {
+                              _clearEventDateTime();
+                              setDialogState(() {});
+                              if (mounted) setState(() {});
+                            },
+                      onReminderChanged: (value) {
+                        _reminderMinutes = value;
+                        _recordHistory(immediate: true);
+                        setDialogState(() {});
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.tonal(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Готово'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _pickImage() async {
@@ -355,6 +457,59 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
+  Future<void> _structurizeWithAI() async {
+    final rawText = _contentCtrl.text;
+    if (rawText.trim().isEmpty) return;
+
+    setState(() => _isAIProcessing = true);
+
+    try {
+      final gemini = ref.read(geminiServiceProvider);
+      final result = await gemini.structureNote(rawText);
+
+      if (!mounted) return;
+      setState(() => _isAIProcessing = false);
+
+      if (result != null) {
+        _ignoreHistory = true;
+        _titleCtrl.text = result.title;
+        _contentCtrl.text = result.content;
+        _tags = result.tags;
+        if (result.colorIndex != null) _colorIndex = result.colorIndex;
+        if (result.eventAt != null) _eventAt = result.eventAt;
+        if (result.reminderMinutes != null) {
+          const allowed = [5, 10, 15, 30, 60, 120, 180, 1440];
+          int closest = allowed[0];
+          int minDiff = 999999;
+          for (var option in allowed) {
+            int diff = (option - result.reminderMinutes!).abs();
+            if (diff < minDiff) {
+              minDiff = diff;
+              closest = option;
+            }
+          }
+          _reminderMinutes = closest;
+        }
+        _ignoreHistory = false;
+        _recordHistory(immediate: true);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Успешно структурировано с ИИ ✨')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isAIProcessing = false);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -368,12 +523,16 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     );
 
     return PopScope(
-      canPop: false,
+      canPop: _canPop,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        final navigator = Navigator.of(context);
         await _save();
-        if (mounted) navigator.pop();
+        if (mounted) {
+          setState(() => _canPop = true);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) Navigator.of(context).pop();
+          });
+        }
       },
       child: Scaffold(
         backgroundColor: pageColor,
@@ -386,9 +545,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             child: _EditorIconButton(
               icon: Icons.arrow_back_rounded,
               onTap: () async {
-                final navigator = Navigator.of(context);
                 await _save();
-                if (mounted) navigator.pop();
+                if (mounted) {
+                  setState(() => _canPop = true);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) Navigator.of(context).pop();
+                  });
+                }
               },
             ),
           ),
@@ -407,6 +570,11 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             _EditorIconButton(
               icon: Icons.redo_rounded,
               onTap: _historyIndex < _history.length - 1 ? _redo : null,
+            ),
+            const SizedBox(width: 8),
+            _EditorIconButton(
+              icon: Icons.tune_rounded,
+              onTap: _showSettingsDialog,
             ),
             const SizedBox(width: 8),
             if (widget.note != null)
@@ -435,40 +603,26 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             const SizedBox(width: 12),
           ],
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            decoration: BoxDecoration(
-              color: scheme.surface.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: scheme.outlineVariant.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Column(
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _isAIProcessing ? null : _structurizeWithAI,
+          icon: _isAIProcessing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.auto_awesome_rounded),
+          label: Text(_isAIProcessing ? 'Анализ...' : 'Сборка ИИ ✨'),
+          backgroundColor: scheme.tertiaryContainer,
+          foregroundColor: scheme.onTertiaryContainer,
+        ),
+        body: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 120),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                EditorToolbar(
-                  tags: _tags,
-                  tagCtrl: _tagCtrl,
-                  colorIndex: _colorIndex,
-                  onAddTag: (val) {
-                    _addTag(val);
-                    _recordHistory(immediate: true);
-                  },
-                  onRemoveTag: (t) {
-                    setState(() => _tags.remove(t));
-                    _recordHistory(immediate: true);
-                  },
-                  onColorChanged: (idx) {
-                    setState(() => _colorIndex = idx);
-                    _recordHistory(immediate: true);
-                  },
-                  scheme: scheme,
-                  tt: tt,
-                ),
-                const SizedBox(height: 18),
                 EditorGallery(
                   imagePaths: _imagePaths,
                   onPickImage: _pickImage,
@@ -494,17 +648,32 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     border: InputBorder.none,
                   ),
                 ),
-                const SizedBox(height: 8),
-                EditorEventSection(
-                  eventAt: _eventAt,
-                  reminderMinutes: _reminderMinutes,
-                  onPickDateTime: _pickEventDateTime,
-                  onClear: _eventAt == null ? null : _clearEventDateTime,
-                  onReminderChanged: (value) {
-                    setState(() => _reminderMinutes = value);
-                    _recordHistory(immediate: true);
-                  },
-                ),
+                if (_tags.isNotEmpty || _eventAt != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 4),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (_eventAt != null)
+                          Chip(
+                            avatar: Icon(Icons.event, size: 16, color: scheme.primary),
+                            label: Text(DateFormat('dd.MM.yy HH:mm').format(_eventAt!)),
+                            backgroundColor: scheme.primaryContainer,
+                            labelStyle: TextStyle(color: scheme.onPrimaryContainer, fontSize: 12, fontWeight: FontWeight.bold),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            side: BorderSide.none,
+                          ),
+                        ..._tags.map((t) => Chip(
+                              label: Text('#$t'),
+                              backgroundColor: scheme.surfaceContainerHighest,
+                              labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              side: BorderSide.none,
+                            )),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _contentCtrl,
@@ -520,10 +689,18 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                 ),
               ],
             ),
-          ),
         ),
-      ),
-    );
+        if (_isAIProcessing)
+          Container(
+            color: Colors.black12,
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          ],
+        ), // Stack
+      ), // Scaffold
+    ); // PopScope
   }
 }
 

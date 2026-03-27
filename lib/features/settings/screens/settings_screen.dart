@@ -19,128 +19,100 @@ class SettingsScreen extends ConsumerWidget {
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('Настройки'),
+        scrolledUnderElevation: 0,
+        backgroundColor: colorScheme.surface,
         centerTitle: true,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
-          // Секция аккаунта
-          _SectionTitle(title: 'Аккаунт'),
-          Card(
-            elevation: 0,
-            color: colorScheme.surfaceContainer,
-            clipBehavior: Clip.antiAlias,
-            child: userAsync.when(
-              data: (user) => user == null
-                  ? ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: CircleAvatar(
-                        backgroundColor: colorScheme.primaryContainer,
-                        child: Icon(Icons.login_rounded, color: colorScheme.onPrimaryContainer),
-                      ),
-                      title: const Text('Войти в аккаунт'),
-                      subtitle: const Text('Включить облачную синхронизацию'),
-                      onTap: () => ref.read(authServiceProvider).signInWithGoogle(),
-                    )
-                  : ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: user.photoURL != null
-                          ? CachedNetworkImage(
-                              imageUrl: user.photoURL!,
-                              imageBuilder: (context, imageProvider) => CircleAvatar(
-                                backgroundImage: imageProvider,
-                                radius: 24,
-                              ),
-                              placeholder: (context, url) => const CircleAvatar(
-                                radius: 24,
-                                child: CircularProgressIndicator(),
-                              ),
-                              errorWidget: (context, url, error) => CircleAvatar(
-                                radius: 24,
-                                backgroundColor: colorScheme.primaryContainer,
-                                child: Icon(Icons.person, color: colorScheme.onPrimaryContainer),
-                              ),
-                            )
-                          : CircleAvatar(
-                              radius: 24,
-                              backgroundColor: colorScheme.primaryContainer,
-                              child: Icon(Icons.person, color: colorScheme.onPrimaryContainer),
-                            ),
-                      title: Text(user.displayName ?? 'Пользователь'),
-                      subtitle: Text(user.email ?? ''),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.logout_rounded),
-                        onPressed: () => _showSignOutDialog(context, ref),
-                        tooltip: 'Выйти',
-                      ),
+          _SectionTitle(title: 'АККАУНТ'),
+          userAsync.when(
+            data: (user) => user == null
+                ? ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: colorScheme.primaryContainer,
+                      child: Icon(Icons.cloud_sync_rounded, color: colorScheme.onPrimaryContainer),
                     ),
-              loading: () => const Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (e, _) => Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Ошибка: $e', style: TextStyle(color: colorScheme.error)),
+                    title: const Text('Включить синхронизацию'),
+                    subtitle: const Text('Войти через Google'),
+                    onTap: () => ref.read(authServiceProvider).signInWithGoogle(),
+                  )
+                : ListTile(
+                    leading: user.photoURL != null
+                        ? CircleAvatar(backgroundImage: CachedNetworkImageProvider(user.photoURL!))
+                        : CircleAvatar(
+                            backgroundColor: colorScheme.primaryContainer,
+                            child: Icon(Icons.person, color: colorScheme.onPrimaryContainer),
+                          ),
+                    title: Text(user.displayName ?? 'Пользователь'),
+                    subtitle: Text(user.email ?? ''),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.logout_rounded),
+                      tooltip: 'Выйти',
+                      onPressed: () => _showSignOutDialog(context, ref),
+                    ),
+                  ),
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
               ),
             ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Ошибка: $e', style: TextStyle(color: colorScheme.error)),
+            ),
           ),
-          
-          const SizedBox(height: 24),
-
-          // Секция оформления
-          _SectionTitle(title: 'Оформление'),
-          Card(
-            elevation: 0,
-            color: colorScheme.surfaceContainer,
-            clipBehavior: Clip.antiAlias,
+          const Divider(height: 32),
+          _SectionTitle(title: 'ОФОРМЛЕНИЕ'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ListTile(
-                  leading: const Icon(Icons.dark_mode_outlined),
-                  title: const Text('Тема приложения'),
-                  subtitle: Text(_themeText(currentTheme)),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => _chooseTheme(context, ref, currentTheme),
+                Text('Тема', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment(value: ThemeMode.system, label: Text('Авто')),
+                      ButtonSegment(value: ThemeMode.light, label: Text('Светлая')),
+                      ButtonSegment(value: ThemeMode.dark, label: Text('Тёмная')),
+                    ],
+                    selected: {currentTheme},
+                    onSelectionChanged: (vals) async {
+                      final value = vals.first;
+                      ref.read(themeModeProvider.notifier).state = value;
+                      await ref.read(settingsServiceProvider).saveThemeIndex(value.index);
+                    },
+                    showSelectedIcon: true,
+                  ),
                 ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 24),
+                Text('Акцентный цвет', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
                     children: [
-                      Text(
-                        'Акцентный цвет',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      _ColorSwatch(
+                        color: colorScheme.primary,
+                        isSelected: currentAccent == null,
+                        isSystem: true,
+                        onTap: () => _setAccentColor(ref, null),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        currentAccent == null
-                            ? 'Используется системный Dynamic Color'
-                            : 'Выбран пользовательский цвет',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          _ColorSwatch(
-                            color: colorScheme.primary,
-                            isSelected: currentAccent == null,
-                            isSystem: true,
-                            onTap: () => _setAccentColor(ref, null),
+                      const SizedBox(width: 12),
+                      ..._accentColors.map(
+                        (choice) => Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: _ColorSwatch(
+                            color: choice.color,
+                            isSelected: currentAccent == choice.color.toARGB32(),
+                            onTap: () => _setAccentColor(ref, choice.color.toARGB32()),
                           ),
-                          ..._accentColors.map(
-                            (choice) => _ColorSwatch(
-                              color: choice.color,
-                              isSelected: currentAccent == choice.color.toARGB32(),
-                              onTap: () => _setAccentColor(ref, choice.color.toARGB32()),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
@@ -148,7 +120,6 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 40),
         ],
       ),
     );
@@ -157,14 +128,6 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _setAccentColor(WidgetRef ref, int? colorValue) async {
     ref.read(accentColorProvider.notifier).state = colorValue;
     await ref.read(settingsServiceProvider).saveAccentColor(colorValue);
-  }
-
-  String _themeText(ThemeMode mode) {
-    return switch (mode) {
-      ThemeMode.system => 'Системная',
-      ThemeMode.light => 'Светлая',
-      ThemeMode.dark => 'Тёмная',
-    };
   }
 
   void _showSignOutDialog(BuildContext context, WidgetRef ref) {
@@ -190,46 +153,6 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
-
-  void _chooseTheme(BuildContext context, WidgetRef ref, ThemeMode current) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Выберите тему',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-              ),
-              ...ThemeMode.values.map(
-                (mode) => RadioListTile<ThemeMode>(
-                  title: Text(_themeText(mode)),
-                  value: mode,
-                  groupValue: current,
-                  onChanged: (value) async {
-                    if (value == null) return;
-                    ref.read(themeModeProvider.notifier).state = value;
-                    await ref.read(settingsServiceProvider).saveThemeIndex(value.index);
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // Вспомогательный виджет для заголовков секций (Material Design)
@@ -241,12 +164,13 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 16, bottom: 8, top: 16),
+      padding: const EdgeInsets.only(left: 16, bottom: 8, top: 8),
       child: Text(
         title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
             ),
       ),
     );

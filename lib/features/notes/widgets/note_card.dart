@@ -15,6 +15,7 @@ class NoteCard extends StatelessWidget {
   final bool isSelected;
   final bool compact;
   final double? fixedHeight;
+  final String heroTagPrefix;
 
   const NoteCard({
     super.key,
@@ -26,6 +27,7 @@ class NoteCard extends StatelessWidget {
     this.isSelected = false,
     this.compact = false,
     this.fixedHeight,
+    this.heroTagPrefix = 'note-',
   });
 
   @override
@@ -45,7 +47,7 @@ class NoteCard extends StatelessWidget {
     final String content = note.content.trim().isEmpty ? 'Пустая заметка' : note.content.trim();
 
     return Hero(
-      tag: 'note-${note.id}',
+      tag: '$heroTagPrefix${note.id}',
       child: Card(
         // Нативный M3: Отключаем тени, используем цвета для иерархии
         elevation: 0,
@@ -68,75 +70,79 @@ class NoteCard extends StatelessWidget {
             children: [
               SizedBox(
                 height: fixedHeight,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Картинка
-                      if (note.imagePaths.isNotEmpty) ...[
-                        _NoteImage(
-                          imagePath: note.imagePaths.first,
-                          compact: compact,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      
-                      // Заголовок и бейдж картинок
-                      Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Картинка (Edge-to-edge)
+                    if (note.imagePaths.isNotEmpty)
+                      _NoteImage(
+                        imagePath: note.imagePaths.first,
+                        compact: compact,
+                      ),
+                    
+                    Padding(
+                      padding: const EdgeInsets.all(12), // Сниженный отступ
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: tt.titleMedium?.copyWith(
-                                // Material 3 использует вес w500 (Medium) для заголовков карточек
-                                fontWeight: FontWeight.w500,
-                                color: scheme.onSurface,
-                              ),
+                          // Заголовок и бейдж картинок
+                          if (note.title.isNotEmpty || note.imagePaths.length > 1) ...[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: tt.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                      color: scheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                if (note.imagePaths.length > 1) ...[
+                                  const SizedBox(width: 8),
+                                  _ImageCountBadge(
+                                    count: note.imagePaths.length,
+                                    scheme: scheme,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          
+                          // Текст заметки (увеличенные maxLines для разницы в размерах)
+                          Text(
+                            content,
+                            maxLines: compact
+                                ? (note.imagePaths.isNotEmpty ? 3 : 6)
+                                : (note.imagePaths.isNotEmpty ? 8 : 15),
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              height: 1.4,
                             ),
                           ),
-                          if (note.imagePaths.length > 1) ...[
-                            const SizedBox(width: 8),
-                            _ImageCountBadge(
-                              count: note.imagePaths.length,
-                              scheme: scheme,
+                          
+                          // Теги
+                          if (note.tags.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: note.tags
+                                  .take(compact ? 2 : 4)
+                                  .map((tag) => _TagChip(label: tag, scheme: scheme))
+                                  .toList(),
                             ),
                           ],
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      
-                      // Текст заметки
-                      Text(
-                        content,
-                        maxLines: compact
-                            ? (note.imagePaths.isNotEmpty ? 2 : 4)
-                            : (note.imagePaths.isNotEmpty ? 3 : 6),
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          height: 1.4, // Комфортный межстрочный интервал (как в Keep)
-                        ),
-                      ),
-                      
-                      // Теги
-                      if (note.tags.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: note.tags
-                              .take(compact ? 2 : 3)
-                              .map((tag) => _TagChip(label: tag, scheme: scheme))
-                              .toList(),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
 
@@ -178,30 +184,27 @@ class _NoteImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12), // Внутренняя картинка чуть меньше внешнего радиуса
-      child: AspectRatio(
-        aspectRatio: compact ? 16 / 9 : 16 / 10,
-        child: imagePath.startsWith('http')
-            ? CachedNetworkImage(
-                imageUrl: imagePath,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => ColoredBox(
-                  color: scheme.surfaceContainerHighest,
-                  child: Center(
-                    child: CircularProgressIndicator(color: scheme.primary),
-                  ),
+    return AspectRatio(
+      aspectRatio: compact ? 16 / 9 : 4 / 3, // Крупнее изображения
+      child: imagePath.startsWith('http')
+          ? CachedNetworkImage(
+              imageUrl: imagePath,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => ColoredBox(
+                color: scheme.surfaceContainerHighest,
+                child: Center(
+                  child: CircularProgressIndicator(color: scheme.primary),
                 ),
-                errorWidget: (context, url, error) => _ImageFallback(scheme: scheme),
-              )
-            : Image.file(
-                File(imagePath),
-                fit: BoxFit.cover,
-                cacheWidth: 640,
-                errorBuilder: (context, error, stackTrace) =>
-                    _ImageFallback(scheme: scheme),
               ),
-      ),
+              errorWidget: (context, url, error) => _ImageFallback(scheme: scheme),
+            )
+          : Image.file(
+              File(imagePath),
+              fit: BoxFit.cover,
+              cacheWidth: 640,
+              errorBuilder: (context, error, stackTrace) =>
+                  _ImageFallback(scheme: scheme),
+            ),
     );
   }
 }

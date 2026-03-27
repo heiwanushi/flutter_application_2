@@ -17,7 +17,7 @@ class EditorEventSection extends StatelessWidget {
     required this.onReminderChanged,
   });
 
-  static const _reminderOptions = <int>[5, 10, 15, 30, 60, 180, 1440];
+  static const _reminderOptions = <int>[5, 10, 15, 30, 60, 120, 180, 1440];
 
   @override
   Widget build(BuildContext context) {

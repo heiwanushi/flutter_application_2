@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/utils/note_colors.dart';
@@ -137,24 +138,32 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final results = showResults ? _filter(allNotes) : const <Note>[];
 
     return Scaffold(
-      backgroundColor: scheme.surfaceContainerLow,
+      backgroundColor: scheme.surface, // Более чистый фон
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SearchBar(
-                    controller: _ctrl,
-                    focusNode: _focus,
-                    hintText: 'Поиск заметок и событий',
-                    leading: const Icon(Icons.search_rounded),
-                    trailing: [
-                      if (_inputValue.isNotEmpty)
-                        IconButton(
+              child: TextField(
+                controller: _ctrl,
+                focusNode: _focus,
+                textInputAction: TextInputAction.search,
+                onChanged: (value) {
+                  _debounce?.cancel();
+                  setState(() => _inputValue = value);
+                  _debounce = Timer(const Duration(milliseconds: 220), () {
+                    if (!mounted) return;
+                    setState(() => _query = value.trim());
+                  });
+                },
+                onSubmitted: _submit,
+                decoration: InputDecoration(
+                  hintText: 'Поиск заметок...',
+                  hintStyle: TextStyle(color: scheme.onSurfaceVariant.withValues(alpha: 0.7)),
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _inputValue.isNotEmpty
+                      ? IconButton(
                           onPressed: () {
                             _debounce?.cancel();
                             _ctrl.clear();
@@ -164,93 +173,77 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                             });
                           },
                           icon: const Icon(Icons.close_rounded),
-                        ),
-                    ],
-                    elevation: WidgetStateProperty.all(0),
-                    backgroundColor: WidgetStateProperty.all(
-                      scheme.surfaceContainerHigh,
-                    ),
-                    side: WidgetStateProperty.all(
-                      BorderSide(
-                        color: scheme.outlineVariant.withValues(alpha: 0.45),
-                      ),
-                    ),
-                    onChanged: (value) {
-                      _debounce?.cancel();
-                      setState(() => _inputValue = value);
-                      _debounce = Timer(const Duration(milliseconds: 220), () {
-                        if (!mounted) return;
-                        setState(() => _query = value.trim());
-                      });
-                    },
-                    onSubmitted: _submit,
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: scheme.surfaceContainerHigh,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(28), // Современные радиусы скругления
+                    borderSide: BorderSide.none,
                   ),
-                  const SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        SegmentedButton<SearchScope>(
-                          segments: const [
-                            ButtonSegment(
-                              value: SearchScope.all,
-                              icon: Icon(Icons.notes_rounded, size: 18),
-                              label: Text('Все'),
-                            ),
-                            ButtonSegment(
-                              value: SearchScope.events,
-                              icon: Icon(Icons.event_rounded, size: 18),
-                              label: Text('События'),
-                            ),
-                          ],
-                          selected: {_scope},
-                          onSelectionChanged: (selection) =>
-                              setState(() => _scope = selection.first),
-                        ),
-                        const SizedBox(width: 8),
-                        FilterChip(
-                          label: const Text('Цвет'),
-                          selected: _colorFilter != null,
-                          avatar: CircleAvatar(
-                            radius: 9,
-                            backgroundColor: _colorFilter == null
-                                ? scheme.surfaceContainerHighest
-                                : NoteColors.bg(_colorFilter!, brightness),
-                          ),
-                          onSelected: (_) => _showColorPicker(context, scheme),
-                        ),
-                      ],
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                ),
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text('События'),
+                    selected: _scope == SearchScope.events,
+                    showCheckmark: false,
+                    avatar: Icon(
+                      Icons.event_rounded,
+                      size: 18,
+                      color: _scope == SearchScope.events
+                          ? scheme.onSecondaryContainer
+                          : scheme.primary,
                     ),
+                    onSelected: (val) => setState(
+                      () => _scope = val ? SearchScope.events : SearchScope.all,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('Цвет...'),
+                    selected: _colorFilter != null,
+                    showCheckmark: false,
+                    avatar: CircleAvatar(
+                      radius: 8,
+                      backgroundColor: _colorFilter == null
+                          ? scheme.surfaceContainerHighest
+                          : NoteColors.bg(_colorFilter!, brightness),
+                    ),
+                    onSelected: (_) => _showColorPicker(context, scheme),
                   ),
                   if (allTags.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 38,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: allTags.map((tag) {
-                          final selected = _tagFilter == tag;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: FilterChip(
-                              label: Text(tag),
-                              selected: selected,
-                              onSelected: (_) => setState(
-                                () => _tagFilter = selected ? null : tag,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
+                    const SizedBox(width: 12),
+                    Container(height: 24, width: 1, color: scheme.outlineVariant.withValues(alpha: 0.5)),
+                    const SizedBox(width: 12),
+                    ...allTags.map((tag) {
+                      final selected = _tagFilter == tag;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(tag),
+                          selected: selected,
+                          onSelected: (_) => setState(
+                            () => _tagFilter = selected ? null : tag,
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ],
               ),
             ),
+            const SizedBox(height: 8),
             const Divider(height: 1),
             Expanded(
               child: showResults
-                  ? _buildResults(context, results)
+                  ? _buildResults(context, results, scheme, tt)
                   : _buildHistory(scheme, tt),
             ),
           ],
@@ -259,25 +252,38 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildResults(BuildContext context, List<Note> results) {
+  Widget _buildResults(BuildContext context, List<Note> results, ColorScheme scheme, TextTheme tt) {
     if (results.isEmpty) {
-      final scheme = Theme.of(context).colorScheme;
-      final tt = Theme.of(context).textTheme;
       return Center(
-        child: Text(
-          'Ничего не найдено',
-          style: tt.bodyLarge?.copyWith(color: scheme.outline),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded, size: 64, color: scheme.surfaceContainerHighest),
+            const SizedBox(height: 16),
+            Text(
+              'Ничего не найдено',
+              style: tt.bodyLarge?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+    final width = MediaQuery.sizeOf(context).width;
+    final crossAxisCount = width >= 960 ? 4 : width >= 680 ? 3 : 2;
+
+    return MasonryGridView.count(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+      crossAxisCount: crossAxisCount,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
       itemCount: results.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) {
         final note = results[i];
-        if (note.eventAt != null) {
+        if (_scope == SearchScope.events && note.eventAt != null) {
           return UpcomingEventCard(
             note: note,
             onTap: () => Navigator.push(
@@ -288,6 +294,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
         return NoteCard(
           note: note,
+          compact: true, // В поиске всегда компактный вид сетки
+          heroTagPrefix: 'search-note-', // Предотвращает зависания Hero анимации
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => NoteEditorScreen(note: note)),
@@ -301,12 +309,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildHistory(ColorScheme scheme, TextTheme tt) {
     if (_history.isEmpty) {
-      return Center(
-        child: Text(
-          'Введите запрос для поиска',
-          style: tt.bodyLarge?.copyWith(color: scheme.outline),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     return ListView(

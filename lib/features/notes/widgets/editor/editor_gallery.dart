@@ -32,20 +32,15 @@ class EditorGallery extends StatelessWidget {
   Widget build(BuildContext context) {
     if (imagePaths.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Фото',
-              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 180,
-              child: AddPhotoCard(scheme: scheme, onTap: onPickImage),
-            ),
-          ],
+        padding: const EdgeInsets.only(bottom: 8),
+        child: TextButton.icon(
+          onPressed: onPickImage,
+          icon: const Icon(Icons.add_photo_alternate_outlined, size: 20),
+          label: const Text('Добавить фото'),
+          style: TextButton.styleFrom(
+            foregroundColor: scheme.onSurfaceVariant,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
         ),
       );
     }

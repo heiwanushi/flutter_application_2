@@ -38,12 +38,12 @@ dependencies:
   image_picker: ^1.1.2
   path_provider: ^2.1.4
   path: ^1.9.0
-  firebase_core: ^2.18.0
-  firebase_auth: ^4.10.0
+  firebase_core: ^4.6.0
+  firebase_auth: ^6.3.0
   google_sign_in: ^6.1.0
   intl: ^0.20.2
   cached_network_image: ^3.4.1
-  cloud_firestore: ^4.17.5
+  cloud_firestore: ^6.2.0
   supabase_flutter: ^2.12.0
   flutter_image_compress: ^2.4.0
   device_calendar: ^4.3.3
@@ -51,6 +51,8 @@ dependencies:
   flutter_timezone: ^5.0.2
   app_links: ^6.4.1
   flutter_staggered_grid_view: ^0.7.0
+  firebase_ai: ^3.10.0
+  firebase_app_check: ^0.4.2
 
 
 dev_dependencies:

@@ -69,37 +69,30 @@ class NotesHeader extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SortMenuButton(
-                  sortMode: sortMode,
-                  sortAsc: sortAsc,
-                  scheme: scheme,
-                  onSelected: onChangeSortMode,
-                  onToggleDirection: onToggleSortDirection,
-                ),
-                const SizedBox(width: 4),
-                CompactIconButton(
-                  tooltip: isGrid
-                      ? '\u0421\u043f\u0438\u0441\u043e\u043a' // Список
-                      : '\u0421\u0435\u0442\u043a\u0430', // Сетка
-                  icon: isGrid
-                      ? Icons.grid_view_rounded
-                      : Icons.view_agenda_rounded,
-                  backgroundColor: scheme.primaryContainer,
-                  iconColor: scheme.onPrimaryContainer,
-                  onTap: onToggleView,
-                ),
-              ],
-            ),
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SortMenuButton(
+                sortMode: sortMode,
+                sortAsc: sortAsc,
+                scheme: scheme,
+                onSelected: onChangeSortMode,
+                onToggleDirection: onToggleSortDirection,
+              ),
+              const SizedBox(width: 4),
+              CompactIconButton(
+                tooltip: isGrid
+                    ? '\u0421\u043f\u0438\u0441\u043e\u043a'
+                    : '\u0421\u0435\u0442\u043a\u0430',
+                icon: isGrid
+                    ? Icons.grid_view_rounded
+                    : Icons.view_agenda_rounded,
+                backgroundColor: scheme.primary,
+                iconColor: scheme.onPrimary,
+                onTap: onToggleView,
+              ),
+            ],
           ),
         ],
       ),
@@ -178,11 +171,11 @@ class SortMenuButton extends StatelessWidget {
       ],
       icon: Icon(
         sortAsc ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-        color: scheme.onPrimaryContainer,
-        size: 18,
+        color: scheme.onPrimary,
+        size: 20,
       ),
       style: IconButton.styleFrom(
-        backgroundColor: scheme.primaryContainer,
+        backgroundColor: scheme.primary,
         fixedSize: const Size(40, 40),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
