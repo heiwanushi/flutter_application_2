@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/settings_service.dart';
@@ -80,40 +81,92 @@ final tagCountsProvider = Provider<Map<String, int>>((ref) {
   return counts;
 });
 
-final filteredNotesProvider = Provider<AsyncValue<List<Note>>>((ref) {
+class FilterParams {
+  final List<Note> notes;
+  final String query;
+  final String? tag;
+  final SortMode sort;
+  final bool asc;
+
+  FilterParams({
+    required this.notes,
+    required this.query,
+    this.tag,
+    required this.sort,
+    required this.asc,
+  });
+}
+
+List<Note> _filterNotesTask(FilterParams params) {
+  var result = params.notes.where((n) {
+    if (n.isDeleted) return false;
+    final matchQuery = params.query.isEmpty ||
+        n.title.toLowerCase().contains(params.query) ||
+        n.content.toLowerCase().contains(params.query) ||
+        n.tags.any((t) => t.toLowerCase().contains(params.query));
+    final matchTag = params.tag == null || n.tags.contains(params.tag);
+    return matchQuery && matchTag;
+  }).toList();
+
+  result.sort((a, b) {
+    if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+    final cmp = switch (params.sort) {
+      SortMode.updatedAt => a.updatedAt.compareTo(b.updatedAt),
+      SortMode.createdAt => a.createdAt.compareTo(b.createdAt),
+      SortMode.title => a.title.compareTo(b.title),
+    };
+    return params.asc ? cmp : -cmp;
+  });
+  return result;
+}
+
+final filteredNotesProvider = FutureProvider<List<Note>>((ref) async {
+  final notesAsync = ref.watch(notesProvider);
   final query = ref.watch(searchQueryProvider).toLowerCase();
   final tag = ref.watch(selectedTagProvider);
   final sort = ref.watch(sortModeProvider);
   final asc = ref.watch(sortAscProvider);
 
-  return ref.watch(notesProvider).whenData((notes) {
-    var result = notes.where((n) {
-      final matchQuery =
-          query.isEmpty ||
-          n.title.toLowerCase().contains(query) ||
-          n.content.toLowerCase().contains(query) ||
-          n.tags.any((t) => t.toLowerCase().contains(query));
-      final matchTag = tag == null || n.tags.contains(tag);
-      return matchQuery && matchTag;
-    }).toList();
+  final notes = notesAsync.value ?? [];
+  if (notes.isEmpty) return [];
 
-    result.sort((a, b) {
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      final cmp = switch (sort) {
-        SortMode.updatedAt => a.updatedAt.compareTo(b.updatedAt),
-        SortMode.createdAt => a.createdAt.compareTo(b.createdAt),
-        SortMode.title => a.title.compareTo(b.title),
-      };
-      return asc ? cmp : -cmp;
-    });
-    return result;
-  });
+  return compute(
+    _filterNotesTask,
+    FilterParams(
+      notes: notes,
+      query: query,
+      tag: tag,
+      sort: sort,
+      asc: asc,
+    ),
+  );
 });
 
 final reminderNotesProvider = Provider<AsyncValue<List<Note>>>((ref) {
   return ref.watch(notesProvider).whenData((notes) {
-    final reminders = notes.where((note) => note.eventAt != null).toList();
+    final reminders = notes
+        .where((note) =>
+            note.eventAt != null && !note.isCompleted && !note.isDeleted)
+        .toList();
     reminders.sort((a, b) => a.eventAt!.compareTo(b.eventAt!));
     return reminders;
+  });
+});
+
+final trashNotesProvider = Provider<AsyncValue<List<Note>>>((ref) {
+  return ref.watch(notesProvider).whenData((notes) {
+    final trash = notes.where((n) => n.isDeleted).toList();
+    trash.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return trash;
+  });
+});
+
+final archivedEventsProvider = Provider<AsyncValue<List<Note>>>((ref) {
+  return ref.watch(notesProvider).whenData((notes) {
+    final archived = notes
+        .where((n) => n.eventAt != null && n.isCompleted && !n.isDeleted)
+        .toList();
+    archived.sort((a, b) => b.eventAt!.compareTo(a.eventAt!));
+    return archived;
   });
 });

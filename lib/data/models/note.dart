@@ -1,3 +1,19 @@
+enum NoteRepeatMode {
+  none,
+  daily,
+  weekly,
+  monthly,
+  yearly;
+
+  String get label => switch (this) {
+    none => 'Без повтора',
+    daily => 'Ежедневно',
+    weekly => 'Еженедельно',
+    monthly => 'Ежемесячно',
+    yearly => 'Ежегодно',
+  };
+}
+
 class Note {
   /// Считается синхронизированной, если isNoteSynced == true
   final bool isNoteSynced;
@@ -15,6 +31,11 @@ class Note {
   final int? reminderMinutes;
   final String? calendarEventId;
   final String? calendarId;
+  final bool isCompleted;
+  final bool isDeleted;
+  final NoteRepeatMode repeatMode;
+
+  int get notificationId => id.hashCode.abs();
 
   const Note({
     required this.id,
@@ -31,6 +52,9 @@ class Note {
     this.reminderMinutes,
     this.calendarEventId,
     this.calendarId,
+    this.isCompleted = false,
+    this.isDeleted = false,
+    this.repeatMode = NoteRepeatMode.none,
   });
 
   Note copyWith({
@@ -46,6 +70,9 @@ class Note {
     int? reminderMinutes,
     String? calendarEventId,
     String? calendarId,
+    bool? isCompleted,
+    bool? isDeleted,
+    NoteRepeatMode? repeatMode,
     bool clearColor = false,
     bool clearEvent = false,
   }) => Note(
@@ -67,6 +94,9 @@ class Note {
         ? null
         : (calendarEventId ?? this.calendarEventId),
     calendarId: clearEvent ? null : (calendarId ?? this.calendarId),
+    isCompleted: isCompleted ?? this.isCompleted,
+    isDeleted: isDeleted ?? this.isDeleted,
+    repeatMode: repeatMode ?? this.repeatMode,
   );
 
   Map<String, dynamic> toJson() => {
@@ -84,6 +114,9 @@ class Note {
     'reminderMinutes': reminderMinutes,
     'calendarEventId': calendarEventId,
     'calendarId': calendarId,
+    'isCompleted': isCompleted,
+    'isDeleted': isDeleted,
+    'repeatMode': repeatMode.name,
   };
 
   factory Note.fromJson(Map<String, dynamic> json) => Note(
@@ -111,5 +144,11 @@ class Note {
     reminderMinutes: json['reminderMinutes'] as int?,
     calendarEventId: json['calendarEventId'] as String?,
     calendarId: json['calendarId'] as String?,
+    isCompleted: json['isCompleted'] as bool? ?? false,
+    isDeleted: json['isDeleted'] as bool? ?? false,
+    repeatMode: NoteRepeatMode.values.firstWhere(
+      (e) => e.name == (json['repeatMode'] as String?),
+      orElse: () => NoteRepeatMode.none,
+    ),
   );
 }

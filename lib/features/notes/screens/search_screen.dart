@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -14,6 +14,39 @@ import '../widgets/note_card.dart';
 import 'note_editor_screen.dart';
 
 enum SearchScope { all, events }
+
+class _SearchFilterParams {
+  final List<Note> allNotes;
+  final String query;
+  final int? colorFilter;
+  final String? tagFilter;
+  final SearchScope scope;
+
+  _SearchFilterParams({
+    required this.allNotes,
+    required this.query,
+    this.colorFilter,
+    this.tagFilter,
+    required this.scope,
+  });
+}
+
+List<Note> _filterTask(_SearchFilterParams params) {
+  final query = params.query.toLowerCase();
+  return params.allNotes.where((note) {
+    if (note.isDeleted) return false;
+    final matchQuery = query.isEmpty ||
+        note.title.toLowerCase().contains(query) ||
+        note.content.toLowerCase().contains(query) ||
+        note.tags.any((tag) => tag.toLowerCase().contains(query));
+    final matchColor =
+        params.colorFilter == null || note.colorIndex == params.colorFilter;
+    final matchTag =
+        params.tagFilter == null || note.tags.contains(params.tagFilter);
+    final matchScope = params.scope == SearchScope.all || note.eventAt != null;
+    return matchQuery && matchColor && matchTag && matchScope;
+  }).toList();
+}
 
 class SearchScreen extends ConsumerStatefulWidget {
   final bool embedInScaffold;
@@ -106,20 +139,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _focus.unfocus();
   }
 
-  List<Note> _filter(List<Note> allNotes) {
-    final query = _query.toLowerCase();
-    return allNotes.where((note) {
-      final matchQuery =
-          query.isEmpty ||
-          note.title.toLowerCase().contains(query) ||
-          note.content.toLowerCase().contains(query) ||
-          note.tags.any((tag) => tag.toLowerCase().contains(query));
-      final matchColor =
-          _colorFilter == null || note.colorIndex == _colorFilter;
-      final matchTag = _tagFilter == null || note.tags.contains(_tagFilter);
-      final matchScope = _scope == SearchScope.all || note.eventAt != null;
-      return matchQuery && matchColor && matchTag && matchScope;
-    }).toList();
+  Future<List<Note>> _getFilteredNotes(List<Note> allNotes) async {
+    return compute(
+      _filterTask,
+      _SearchFilterParams(
+        allNotes: allNotes,
+        query: _query,
+        colorFilter: _colorFilter,
+        tagFilter: _tagFilter,
+        scope: _scope,
+      ),
+    );
   }
 
   @override
@@ -130,15 +160,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final allNotes = ref.watch(notesProvider).value ?? [];
     final allTags = ref.watch(allTagsProvider);
 
-    final showResults =
-        _inputValue.isNotEmpty ||
+    final showResults = _inputValue.isNotEmpty ||
         _colorFilter != null ||
         _tagFilter != null ||
         _scope == SearchScope.events;
-    final results = showResults ? _filter(allNotes) : const <Note>[];
 
     return Scaffold(
-      backgroundColor: scheme.surface, // Более чистый фон
+      backgroundColor: scheme.surface,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,7 +188,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 onSubmitted: _submit,
                 decoration: InputDecoration(
                   hintText: 'Поиск заметок...',
-                  hintStyle: TextStyle(color: scheme.onSurfaceVariant.withValues(alpha: 0.7)),
+                  hintStyle: TextStyle(
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7)),
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: _inputValue.isNotEmpty
                       ? IconButton(
@@ -178,10 +207,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   filled: true,
                   fillColor: scheme.surfaceContainerHigh,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(28), // Современные радиусы скругления
+                    borderRadius: BorderRadius.circular(28),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 ),
               ),
             ),
@@ -220,7 +250,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                   if (allTags.isNotEmpty) ...[
                     const SizedBox(width: 12),
-                    Container(height: 24, width: 1, color: scheme.outlineVariant.withValues(alpha: 0.5)),
+                    Container(
+                        height: 24,
+                        width: 1,
+                        color: scheme.outlineVariant.withValues(alpha: 0.5)),
                     const SizedBox(width: 12),
                     ...allTags.map((tag) {
                       final selected = _tagFilter == tag;
@@ -242,9 +275,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             const SizedBox(height: 8),
             const Divider(height: 1),
             Expanded(
-              child: showResults
-                  ? _buildResults(context, results, scheme, tt)
-                  : _buildHistory(scheme, tt),
+              child: !showResults
+                  ? _buildHistory(scheme, tt)
+                  : FutureBuilder<List<Note>>(
+                      future: _getFilteredNotes(allNotes),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                                ConnectionState.waiting &&
+                            !snapshot.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        return _buildResults(
+                            context, snapshot.data ?? [], scheme, tt);
+                      },
+                    ),
             ),
           ],
         ),
@@ -252,13 +297,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildResults(BuildContext context, List<Note> results, ColorScheme scheme, TextTheme tt) {
+  Widget _buildResults(
+      BuildContext context, List<Note> results, ColorScheme scheme, TextTheme tt) {
     if (results.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, size: 64, color: scheme.surfaceContainerHighest),
+            Icon(Icons.search_off_rounded,
+                size: 64, color: scheme.surfaceContainerHighest),
             const SizedBox(height: 16),
             Text(
               'Ничего не найдено',
@@ -273,7 +320,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
 
     final width = MediaQuery.sizeOf(context).width;
-    final crossAxisCount = width >= 960 ? 4 : width >= 680 ? 3 : 2;
+    final crossAxisCount = width >= 960
+        ? 4
+        : width >= 680
+            ? 3
+            : 2;
 
     return MasonryGridView.count(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
@@ -290,12 +341,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               context,
               MaterialPageRoute(builder: (_) => NoteEditorScreen(note: note)),
             ),
+            onToggleCompleted: () =>
+                ref.read(notesProvider.notifier).toggleCompleted(note.id),
           );
         }
         return NoteCard(
           note: note,
           compact: true, // В поиске всегда компактный вид сетки
-          heroTagPrefix: 'search-note-', // Предотвращает зависания Hero анимации
+          heroTagPrefix:
+              'search-note-', // Предотвращает зависания Hero анимации
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => NoteEditorScreen(note: note)),

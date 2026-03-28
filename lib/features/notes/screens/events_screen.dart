@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/note.dart';
 import '../providers/notes_filters_provider.dart';
+import '../providers/notes_provider.dart';
 
 import '../widgets/event_note_cards.dart';
 import 'note_editor_screen.dart';
@@ -45,6 +46,7 @@ class EventsScreen extends ConsumerWidget {
                     'Просрочено',
                     grouped['overdue']!,
                     openNote,
+                    ref,
                   ),
                 if (today.isNotEmpty) ...[
                   SliverToBoxAdapter(
@@ -56,32 +58,39 @@ class EventsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 240,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: today.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 12),
-                        itemBuilder: (context, index) => TodayEventCard(
-                          note: today[index],
-                          onTap: () => openNote(today[index]),
+                  SliverList.list(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < today.length; i++) ...[
+                              TodayEventCard(
+                                note: today[i],
+                                onTap: () => openNote(today[i]),
+                                onToggleCompleted: () => ref
+                                    .read(notesProvider.notifier)
+                                    .toggleCompleted(today[i].id),
+                              ),
+                              if (i != today.length - 1) const SizedBox(height: 10),
+                            ],
+                          ],
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
                 if (grouped['tomorrow']!.isNotEmpty)
-                  _buildSmallSection('Завтра', grouped['tomorrow']!, openNote),
+                  _buildSmallSection('Завтра', grouped['tomorrow']!, openNote, ref),
                 if (grouped['week']!.isNotEmpty)
                   _buildSmallSection(
                     'На этой неделе',
                     grouped['week']!,
                     openNote,
+                    ref,
                   ),
                 if (grouped['later']!.isNotEmpty)
-                  _buildSmallSection('Позже', grouped['later']!, openNote),
+                  _buildSmallSection('Позже', grouped['later']!, openNote, ref),
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             );
@@ -95,6 +104,7 @@ class EventsScreen extends ConsumerWidget {
     String title,
     List<Note> notes,
     void Function(Note) openNote,
+    WidgetRef ref,
   ) {
     return SliverList.list(
       children: [
@@ -113,6 +123,9 @@ class EventsScreen extends ConsumerWidget {
                 UpcomingEventCard(
                   note: notes[i],
                   onTap: () => openNote(notes[i]),
+                  onToggleCompleted: () => ref
+                      .read(notesProvider.notifier)
+                      .toggleCompleted(notes[i].id),
                 ),
                 if (i != notes.length - 1) const SizedBox(height: 10),
               ],

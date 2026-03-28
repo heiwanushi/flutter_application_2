@@ -6,7 +6,8 @@ import '../../../data/repositories/notes_repository.dart';
 import '../../../data/repositories/firestore_repository.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/calendar_service.dart';
-import '../../../core/services/sync_service.dart'; // Импорт
+import '../../../core/services/sync_service.dart';
+import '../../../core/services/notification_service.dart';
 
 final notesRepositoryProvider = Provider((_) => NotesRepository());
 final selectedIdsProvider = StateProvider<Set<String>>((ref) => {});
@@ -69,7 +70,17 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     Set<String>? deletedIds,
   }) async {
     state = AsyncData(notes);
-    await _localRepo.saveAll(notes);
+    
+    // Оптимизация: используем Hive точечно вместо полной перезаписи всего списка
+    if (noteToSync != null) {
+      await _localRepo.putNote(noteToSync);
+    } else if (deletedId != null) {
+      await _localRepo.deleteNote(deletedId);
+    } else if (deletedIds != null) {
+      await _localRepo.deleteNotes(deletedIds);
+    } else {
+      await _localRepo.saveAll(notes);
+    }
 
     final user = ref.read(authStateProvider).value;
     if (user != null) {
@@ -120,7 +131,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
           if (n.id == syncedNote.id) syncedNote else n,
       ];
       state = AsyncData(newList);
-      await _localRepo.saveAll(newList);
+      await _localRepo.putNote(syncedNote);
     } catch (e) {
       debugPrint('Ошибка фоновой синхронизации: $e');
     }
@@ -137,6 +148,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     int? reminderMinutes,
     String? calendarEventId,
     String? calendarId,
+    NoteRepeatMode repeatMode = NoteRepeatMode.none,
   }) async {
     final note = Note(
       id: _uuid.v4(),
@@ -153,9 +165,12 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       reminderMinutes: reminderMinutes,
       calendarEventId: calendarEventId,
       calendarId: calendarId,
+      repeatMode: repeatMode,
     );
     final notes = <Note>[...(state.value ?? <Note>[]), note];
     await _persist(notes, noteToSync: note);
+    // Планируем уведомление
+    await ref.read(notificationServiceProvider).scheduleNoteNotification(note);
     return note;
   }
 
@@ -169,6 +184,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     int? reminderMinutes,
     String? calendarEventId,
     String? calendarId,
+    NoteRepeatMode? repeatMode,
     bool clearEvent = false,
   }) async {
     Note? updatedNote;
@@ -202,6 +218,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
               reminderMinutes: reminderMinutes,
               calendarEventId: calendarEventId,
               calendarId: calendarId,
+              repeatMode: repeatMode,
               clearEvent: clearEvent,
             );
             return updatedNote!;
@@ -209,7 +226,11 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
         else
           n,
     ];
-    if (updatedNote != null) await _persist(notes, noteToSync: updatedNote);
+    if (updatedNote != null) {
+      await _persist(notes, noteToSync: updatedNote);
+      // Обновляем уведомление
+      await ref.read(notificationServiceProvider).scheduleNoteNotification(updatedNote!);
+    }
     return updatedNote;
   }
 
@@ -218,7 +239,62 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     final noteToDelete = currentNotes.where((n) => n.id == id).isNotEmpty
         ? currentNotes.firstWhere((n) => n.id == id)
         : null;
-    // Удаляем картинки из Supabase
+
+    if (noteToDelete != null) {
+      try {
+        await ref.read(calendarServiceProvider).deleteNoteEvent(noteToDelete);
+      } catch (_) {}
+    }
+
+    Note? updatedNote;
+    final notes = <Note>[
+      for (final n in currentNotes)
+        if (n.id == id)
+          (() {
+            updatedNote = n.copyWith(isDeleted: true, isNoteSynced: false);
+            return updatedNote!;
+          })()
+        else
+          n,
+    ];
+
+    if (updatedNote != null) {
+      await _persist(notes, noteToSync: updatedNote);
+      // Отменяем уведомление
+      await ref.read(notificationServiceProvider).cancelNoteNotification(id);
+    }
+  }
+
+  Future<void> deleteMultiple(Set<String> ids) async {
+    final currentNotes = state.value ?? <Note>[];
+    final updatedNotesList = <Note>[];
+
+    for (final n in currentNotes) {
+      if (ids.contains(n.id)) {
+        try {
+          await ref.read(calendarServiceProvider).deleteNoteEvent(n);
+        } catch (_) {}
+        final updated = n.copyWith(isDeleted: true, isNoteSynced: false);
+        updatedNotesList.add(updated);
+        await _remoteRepo?.upsertNote(updated);
+      } else {
+        updatedNotesList.add(n);
+      }
+    }
+    state = AsyncData(updatedNotesList);
+    await _localRepo.putNotes(updatedNotesList);
+    
+    // Отменяем уведомления для всех выбранных
+    for (final id in ids) {
+      await ref.read(notificationServiceProvider).cancelNoteNotification(id);
+    }
+  }
+
+  Future<void> permanentlyDelete(String id) async {
+    final currentNotes = state.value ?? <Note>[];
+    final noteToDelete = currentNotes.where((n) => n.id == id).isNotEmpty
+        ? currentNotes.firstWhere((n) => n.id == id)
+        : null;
     final user = ref.read(authStateProvider).value;
     if (noteToDelete != null && user != null) {
       final syncService = SyncService(user.uid);
@@ -234,14 +310,15 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
         if (n.id != id) n,
     ];
     await _persist(notes, deletedId: id);
+    // Отменяем уведомление окончательно
+    await ref.read(notificationServiceProvider).cancelNoteNotification(id);
   }
 
-  Future<void> deleteMultiple(Set<String> ids) async {
+  Future<void> permanentlyDeleteMultiple(Set<String> ids) async {
     final currentNotes = state.value ?? <Note>[];
     final user = ref.read(authStateProvider).value;
     if (user != null) {
       final syncService = SyncService(user.uid);
-      // Собираем все картинки для удаления
       final imagesToDelete = <String>[];
       for (final n in currentNotes) {
         if (ids.contains(n.id)) {
@@ -262,6 +339,87 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
         if (!ids.contains(n.id)) n,
     ];
     await _persist(notes, deletedIds: ids);
+    // Отменяем все
+    for (final id in ids) {
+      await ref.read(notificationServiceProvider).cancelNoteNotification(id);
+    }
+  }
+
+  Future<void> restore(String id) async {
+    final currentNotes = state.value ?? <Note>[];
+    Note? updatedNote;
+    final notes = <Note>[
+      for (final n in currentNotes)
+        if (n.id == id)
+          (() {
+            updatedNote = n.copyWith(isDeleted: false, isNoteSynced: false);
+            return updatedNote!;
+          })()
+        else
+          n,
+    ];
+    if (updatedNote != null) {
+      await _persist(notes, noteToSync: updatedNote);
+      // Восстанавливаем уведомление
+      await ref.read(notificationServiceProvider).scheduleNoteNotification(updatedNote!);
+    }
+  }
+
+  Future<void> emptyTrash() async {
+    final currentNotes = state.value ?? <Note>[];
+    final idsToDelete = currentNotes
+        .where((n) => n.isDeleted)
+        .map((n) => n.id)
+        .toSet();
+    if (idsToDelete.isNotEmpty) {
+      await permanentlyDeleteMultiple(idsToDelete);
+    }
+  }
+
+  Future<void> clearArchive() async {
+    final currentNotes = state.value ?? <Note>[];
+    final idsToDelete = currentNotes
+        .where((n) => n.eventAt != null && n.isCompleted && !n.isDeleted)
+        .map((n) => n.id)
+        .toSet();
+    if (idsToDelete.isNotEmpty) {
+      await permanentlyDeleteMultiple(idsToDelete);
+    }
+  }
+
+  Future<void> toggleCompleted(String id) async {
+    Note? updatedNote;
+    final notes = <Note>[
+      for (final n in state.value ?? <Note>[])
+        if (n.id == id)
+          (() {
+            updatedNote = n.copyWith(
+              isCompleted: !n.isCompleted,
+              isNoteSynced: false,
+            );
+            return updatedNote!;
+          })()
+        else
+          n,
+    ];
+    if (updatedNote != null) {
+      state = AsyncData(notes);
+      await _localRepo.putNote(updatedNote!);
+      final user = ref.read(authStateProvider).value;
+      if (user != null) {
+        await FirestoreRepository(user.uid).upsertNote(updatedNote!);
+        final syncedNote = updatedNote!.copyWith(isNoteSynced: true);
+        final currentNotes = state.value ?? <Note>[];
+        final newList = <Note>[
+          for (final n in currentNotes)
+            if (n.id == id) syncedNote else n,
+        ];
+        state = AsyncData(newList);
+        await _localRepo.putNote(syncedNote);
+      }
+      // Обновляем уведомление (отменяем если завершено, иначе планируем)
+      await ref.read(notificationServiceProvider).scheduleNoteNotification(updatedNote!);
+    }
   }
 
   Future<void> togglePin(String id) async {
@@ -281,7 +439,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     ];
     if (updatedNote != null) {
       state = AsyncData(notes);
-      await _localRepo.saveAll(notes);
+      await _localRepo.putNote(updatedNote!);
       final user = ref.read(authStateProvider).value;
       if (user != null) {
         await FirestoreRepository(user.uid).upsertNote(updatedNote!);
@@ -293,7 +451,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
             if (n.id == id) syncedNote else n,
         ];
         state = AsyncData(newList);
-        await _localRepo.saveAll(newList);
+        await _localRepo.putNote(syncedNote);
       }
     }
   }
@@ -316,7 +474,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       }
     }
     state = AsyncData(updatedNotesList);
-    await _localRepo.saveAll(updatedNotesList);
+    await _localRepo.putNotes(updatedNotesList);
   }
 
   Future<void> setColor(String id, int? colorIndex) async {
@@ -337,7 +495,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     ];
     if (updatedNote != null) {
       state = AsyncData(notes);
-      await _localRepo.saveAll(notes);
+      await _localRepo.putNote(updatedNote!);
       final user = ref.read(authStateProvider).value;
       if (user != null) {
         await FirestoreRepository(user.uid).upsertNote(updatedNote!);
@@ -349,7 +507,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
             if (n.id == id) syncedNote else n,
         ];
         state = AsyncData(newList);
-        await _localRepo.saveAll(newList);
+        await _localRepo.putNote(syncedNote);
       }
     }
   }
@@ -368,7 +526,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     ];
 
     state = AsyncData(notes);
-    await _localRepo.saveAll(notes);
+    final noteToSave = notes.firstWhere((n) => n.id == id);
+    await _localRepo.putNote(noteToSave);
   }
 }
-

@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../../data/models/note.dart';
 
 class EditorEventSection extends StatelessWidget {
   final DateTime? eventAt;
   final int reminderMinutes;
+  final NoteRepeatMode repeatMode;
   final VoidCallback onPickDateTime;
   final VoidCallback? onClear;
   final ValueChanged<int> onReminderChanged;
+  final ValueChanged<NoteRepeatMode> onRepeatChanged;
 
   const EditorEventSection({
     super.key,
     required this.eventAt,
     required this.reminderMinutes,
+    required this.repeatMode,
     required this.onPickDateTime,
     required this.onClear,
     required this.onReminderChanged,
+    required this.onRepeatChanged,
   });
 
   static const _reminderOptions = <int>[5, 10, 15, 30, 60, 120, 180, 1440];
@@ -22,46 +27,60 @@ class EditorEventSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final formattedDate = eventAt == null
-        ? 'Дата и время не выбраны'
-        : DateFormat('dd.MM.yyyy, HH:mm').format(eventAt!);
+    final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.event_outlined, size: 18, color: scheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Событие и напоминание',
-                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.calendar_today_rounded,
+                  size: 20,
+                  color: scheme.primary,
                 ),
               ),
-              if (onClear != null)
+              const SizedBox(width: 12),
+              Text(
+                'Напоминание',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const Spacer(),
+              if (eventAt != null && onClear != null)
                 IconButton(
                   onPressed: onClear,
-                  tooltip: 'Убрать событие',
-                  icon: const Icon(Icons.close_rounded, size: 18),
+                  icon: const Icon(Icons.close_rounded),
+                  style: IconButton.styleFrom(
+                    backgroundColor: scheme.errorContainer.withValues(alpha: 0.5),
+                    foregroundColor: scheme.error,
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           InkWell(
-            borderRadius: BorderRadius.circular(16),
             onTap: onPickDateTime,
+            borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: scheme.surface,
                 borderRadius: BorderRadius.circular(16),
@@ -71,16 +90,18 @@ class EditorEventSection extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.schedule_rounded, color: scheme.onSurfaceVariant),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      formattedDate,
-                      style: tt.bodyMedium?.copyWith(
-                        fontWeight: eventAt == null
-                            ? FontWeight.w400
-                            : FontWeight.w600,
-                      ),
+                  Icon(
+                    Icons.access_time_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    eventAt != null
+                        ? DateFormat('dd.MM.yyyy HH:mm').format(eventAt!)
+                        : 'Выберите дату и время',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: eventAt != null ? scheme.onSurface : scheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -90,9 +111,9 @@ class EditorEventSection extends StatelessWidget {
           if (eventAt != null) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
-              initialValue: reminderMinutes,
+              value: _reminderOptions.contains(reminderMinutes) ? reminderMinutes : 10,
               decoration: InputDecoration(
-                labelText: 'Напомнить',
+                labelText: 'Напомнить за',
                 filled: true,
                 fillColor: scheme.surface,
                 border: OutlineInputBorder(
@@ -111,9 +132,9 @@ class EditorEventSection extends StatelessWidget {
               ),
               items: _reminderOptions
                   .map(
-                    (minutes) => DropdownMenuItem(
-                      value: minutes,
-                      child: Text(_reminderLabel(minutes)),
+                    (mins) => DropdownMenuItem(
+                      value: mins,
+                      child: Text(mins < 60 ? '$mins мин' : '${mins ~/ 60} ч'),
                     ),
                   )
                   .toList(),
@@ -121,15 +142,42 @@ class EditorEventSection extends StatelessWidget {
                 if (value != null) onReminderChanged(value);
               },
             ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<NoteRepeatMode>(
+              value: repeatMode,
+              decoration: InputDecoration(
+                labelText: 'Повтор',
+                filled: true,
+                fillColor: scheme.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.45),
+                  ),
+                ),
+                isDense: true,
+              ),
+              items: NoteRepeatMode.values
+                  .map(
+                    (mode) => DropdownMenuItem(
+                      value: mode,
+                      child: Text(mode.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) onRepeatChanged(value);
+              },
+            ),
           ],
         ],
       ),
     );
-  }
-
-  String _reminderLabel(int minutes) {
-    if (minutes < 60) return 'За $minutes мин';
-    if (minutes < 1440) return 'За ${minutes ~/ 60} ч';
-    return 'За ${minutes ~/ 1440} д';
   }
 }

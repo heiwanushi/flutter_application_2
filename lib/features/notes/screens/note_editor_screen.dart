@@ -29,6 +29,7 @@ class _NoteState {
   final List<String> imagePaths;
   final DateTime? eventAt;
   final int reminderMinutes;
+  final NoteRepeatMode repeatMode;
 
   _NoteState(
     this.title,
@@ -38,6 +39,7 @@ class _NoteState {
     this.imagePaths,
     this.eventAt,
     this.reminderMinutes,
+    this.repeatMode,
   );
 }
 
@@ -60,6 +62,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   late bool _isPinned;
   DateTime? _eventAt;
   int _reminderMinutes = 10;
+  NoteRepeatMode _repeatMode = NoteRepeatMode.none;
   bool _isAIProcessing = false;
   bool _canPop = false;
   bool _isSaving = false;
@@ -82,6 +85,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _isPinned = n?.isPinned ?? false;
     _eventAt = n?.eventAt;
     _reminderMinutes = n?.reminderMinutes ?? 10;
+    _repeatMode = n?.repeatMode ?? NoteRepeatMode.none;
 
     _recordHistory(immediate: true);
     _titleCtrl.addListener(_onTextChanged);
@@ -113,6 +117,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         _isPinned == n.isPinned &&
         _eventAt == n.eventAt &&
         _reminderMinutes == (n.reminderMinutes ?? 10) &&
+        _repeatMode == n.repeatMode &&
         listEquals(_tags, n.tags) &&
         listEquals(_imagePaths, n.imagePaths));
   }
@@ -135,6 +140,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       List.from(_imagePaths),
       _eventAt,
       _reminderMinutes,
+      _repeatMode,
     );
 
     if (_history.isNotEmpty &&
@@ -143,6 +149,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         _history[_historyIndex].colorIndex == newState.colorIndex &&
         _history[_historyIndex].eventAt == newState.eventAt &&
         _history[_historyIndex].reminderMinutes == newState.reminderMinutes &&
+        _history[_historyIndex].repeatMode == newState.repeatMode &&
         listEquals(_history[_historyIndex].tags, newState.tags)) {
       return;
     }
@@ -184,6 +191,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _imagePaths = List.from(s.imagePaths);
     _eventAt = s.eventAt;
     _reminderMinutes = s.reminderMinutes;
+    _repeatMode = s.repeatMode;
     _ignoreHistory = false;
   }
 
@@ -208,6 +216,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           isPinned: _isPinned,
           eventAt: _eventAt,
           reminderMinutes: _eventAt == null ? null : _reminderMinutes,
+          repeatMode: _repeatMode,
         );
       } else {
         final oldNote = widget.note!;
@@ -217,7 +226,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             content != oldNote.content ||
             !listEquals(_tags, oldNote.tags) ||
             _eventAt != oldNote.eventAt ||
-            _reminderMinutes != (oldNote.reminderMinutes ?? 10);
+            _reminderMinutes != (oldNote.reminderMinutes ?? 10) ||
+            _repeatMode != oldNote.repeatMode;
 
         if (imageChanged || contentChanged) {
           savedNote = await notifier.editNote(
@@ -230,6 +240,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             reminderMinutes: _eventAt == null ? null : _reminderMinutes,
             calendarEventId: oldNote.calendarEventId,
             calendarId: oldNote.calendarId,
+            repeatMode: _repeatMode,
             clearEvent: _eventAt == null,
           );
         } else {
@@ -305,7 +316,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   }
 
   void _clearEventDateTime() {
-    setState(() => _eventAt = null);
+    setState(() {
+      _eventAt = null;
+      _repeatMode = NoteRepeatMode.none;
+    });
     _recordHistory(immediate: true);
   }
 
@@ -393,6 +407,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     EditorEventSection(
                       eventAt: _eventAt,
                       reminderMinutes: _reminderMinutes,
+                      repeatMode: _repeatMode,
                       onPickDateTime: () async {
                         await _pickEventDateTime();
                         setDialogState(() {});
@@ -407,6 +422,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                             },
                       onReminderChanged: (value) {
                         _reminderMinutes = value;
+                        _recordHistory(immediate: true);
+                        setDialogState(() {});
+                        if (mounted) setState(() {});
+                      },
+                      onRepeatChanged: (value) {
+                        _repeatMode = value;
                         _recordHistory(immediate: true);
                         setDialogState(() {});
                         if (mounted) setState(() {});
@@ -692,7 +713,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         ),
         if (_isAIProcessing)
           Container(
-            color: Colors.black12,
+            color: Colors.black.withValues(alpha: 0.3),
             child: const Center(
               child: CircularProgressIndicator(),
             ),

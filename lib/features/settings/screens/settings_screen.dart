@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/settings_service.dart';
+import '../../notes/screens/archive_screen.dart';
+import '../../notes/screens/trash_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -62,6 +64,28 @@ class SettingsScreen extends ConsumerWidget {
             error: (e, _) => Padding(
               padding: const EdgeInsets.all(16),
               child: Text('Ошибка: $e', style: TextStyle(color: colorScheme.error)),
+            ),
+          ),
+          const Divider(height: 32),
+          _SectionTitle(title: 'ДАННЫЕ'),
+          ListTile(
+            leading: Icon(Icons.inventory_2_rounded, color: colorScheme.primary),
+            title: const Text('Архив событий'),
+            subtitle: const Text('Выполненные события собраны здесь'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ArchiveScreen()),
+            ),
+          ),
+          ListTile(
+            leading: Icon(Icons.delete_rounded, color: colorScheme.primary),
+            title: const Text('Корзина'),
+            subtitle: const Text('Удалённые заметки'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TrashScreen()),
             ),
           ),
           const Divider(height: 32),

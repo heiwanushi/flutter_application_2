@@ -6,8 +6,14 @@ import '../../../data/models/note.dart';
 class TodayEventCard extends StatelessWidget {
   final Note note;
   final VoidCallback onTap;
+  final VoidCallback? onToggleCompleted;
 
-  const TodayEventCard({super.key, required this.note, required this.onTap});
+  const TodayEventCard({
+    super.key,
+    required this.note,
+    required this.onTap,
+    this.onToggleCompleted,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,38 +29,52 @@ class TodayEventCard extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         onTap: onTap,
-        child: SizedBox(
-          width: 280,
+        child: Opacity(
+          opacity: note.isCompleted ? 0.5 : 1.0,
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _TimeBadge(
-                  label: DateFormat('HH:mm').format(note.eventAt!),
-                  backgroundColor: scheme.onPrimaryContainer.withValues(alpha: 0.12),
-                  foregroundColor: scheme.onPrimaryContainer,
-                ),
-                const Spacer(),
-                Text(
-                  note.title.isNotEmpty ? note.title : 'Без названия',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.titleLarge?.copyWith(
-                    color: scheme.onPrimaryContainer,
-                    // Material 3 использует более легкие шрифты, убираем экстремальный w900
-                    fontWeight: FontWeight.w600, 
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _TimeBadge(
+                        label: DateFormat('HH:mm').format(note.eventAt!),
+                        backgroundColor: scheme.onPrimaryContainer.withValues(alpha: 0.12),
+                        foregroundColor: scheme.onPrimaryContainer,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        note.title.isNotEmpty ? note.title : 'Без названия',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleLarge?.copyWith(
+                          color: scheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                          decoration: note.isCompleted ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        note.content.isNotEmpty ? note.content : 'Пустая заметка',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodyMedium?.copyWith(
+                          color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  note.content.isNotEmpty ? note.content : 'Пустая заметка',
-                  maxLines: 3, // Немного уменьшили для баланса отступов
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodyMedium?.copyWith(
-                    color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+                if (onToggleCompleted != null)
+                  Checkbox(
+                    value: note.isCompleted,
+                    onChanged: (_) => onToggleCompleted!(),
+                    activeColor: scheme.onPrimaryContainer,
+                    checkColor: scheme.primaryContainer,
                   ),
-                ),
               ],
             ),
           ),
@@ -67,8 +87,14 @@ class TodayEventCard extends StatelessWidget {
 class UpcomingEventCard extends StatelessWidget {
   final Note note;
   final VoidCallback onTap;
+  final VoidCallback? onToggleCompleted;
 
-  const UpcomingEventCard({super.key, required this.note, required this.onTap});
+  const UpcomingEventCard({
+    super.key,
+    required this.note,
+    required this.onTap,
+    this.onToggleCompleted,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -81,74 +107,85 @@ class UpcomingEventCard extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Плашка с датой переделана под стандартный вид secondaryContainer
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: scheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+        child: Opacity(
+          opacity: note.isCompleted ? 0.5 : 1.0,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Плашка с датой переделана под стандартный вид secondaryContainer
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: scheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        DateFormat('dd').format(note.eventAt!),
+                        style: tt.titleMedium?.copyWith(
+                          color: scheme.onSecondaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        DateFormat('MMM', 'ru').format(note.eventAt!),
+                        style: tt.labelSmall?.copyWith(
+                          color: scheme.onSecondaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      DateFormat('dd').format(note.eventAt!),
-                      style: tt.titleMedium?.copyWith(
-                        color: scheme.onSecondaryContainer,
-                        fontWeight: FontWeight.bold,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        note.title.isNotEmpty ? note.title : 'Без названия',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          decoration: note.isCompleted ? TextDecoration.lineThrough : null,
+                        ),
                       ),
-                    ),
-                    Text(
-                      DateFormat('MMM', 'ru').format(note.eventAt!),
-                      style: tt.labelSmall?.copyWith(
-                        color: scheme.onSecondaryContainer,
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormat('EEEE, HH:mm', 'ru').format(note.eventAt!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelMedium?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        note.content.isNotEmpty ? note.content : 'Пустая заметка',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      note.title.isNotEmpty ? note.title : 'Без названия',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('EEEE, HH:mm', 'ru').format(note.eventAt!),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.labelMedium?.copyWith(
-                        color: scheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      note.content.isNotEmpty ? note.content : 'Пустая заметка',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                if (onToggleCompleted != null) ...[
+                  const SizedBox(width: 8),
+                  Checkbox(
+                    value: note.isCompleted,
+                    onChanged: (_) => onToggleCompleted!(),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
