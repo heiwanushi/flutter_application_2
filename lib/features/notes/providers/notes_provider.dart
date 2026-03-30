@@ -149,6 +149,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     String? calendarEventId,
     String? calendarId,
     NoteRepeatMode repeatMode = NoteRepeatMode.none,
+    String? originalContent,
   }) async {
     final note = Note(
       id: _uuid.v4(),
@@ -166,6 +167,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
       calendarEventId: calendarEventId,
       calendarId: calendarId,
       repeatMode: repeatMode,
+      originalContent: originalContent,
     );
     final notes = <Note>[...(state.value ?? <Note>[]), note];
     await _persist(notes, noteToSync: note);
@@ -186,6 +188,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     String? calendarId,
     NoteRepeatMode? repeatMode,
     bool clearEvent = false,
+    String? originalContent,
   }) async {
     Note? updatedNote;
     final currentNotes = state.value ?? <Note>[];
@@ -220,6 +223,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
               calendarId: calendarId,
               repeatMode: repeatMode,
               clearEvent: clearEvent,
+              originalContent: originalContent,
             );
             return updatedNote!;
           })()

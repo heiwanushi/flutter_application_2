@@ -36,8 +36,7 @@ class NoteCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final tt = theme.textTheme;
 
-    // В Pixel OS (Google Keep) цветные заметки имеют сплошной цвет без обводки.
-    // Обычные заметки используют surfaceContainerLow и тонкую обводку.
+    final bool isAIEdited = note.originalContent != null;
     final bool hasCustomColor = note.colorIndex != null;
     final Color cardColor = hasCustomColor
         ? NoteColors.bg(note.colorIndex!, theme.brightness)
@@ -49,23 +48,21 @@ class NoteCard extends StatelessWidget {
     return Hero(
       tag: '$heroTagPrefix${note.id}',
       child: Card(
-        // Нативный M3: Отключаем тени, используем цвета для иерархии
         elevation: 0,
         color: cardColor,
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16), // Классический радиус Pixel OS
+          borderRadius: BorderRadius.circular(16),
           side: isSelected
-              ? BorderSide(color: scheme.primary, width: 2) // Акцент при выделении
+              ? BorderSide(color: scheme.primary, width: 2)
               : hasCustomColor
-                  ? BorderSide.none // Нет рамки, если есть цвет
-                  : BorderSide(color: scheme.outlineVariant, width: 1), // Стандартная рамка
+                  ? BorderSide.none
+                  : BorderSide(color: scheme.outlineVariant, width: 1),
         ),
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
-          // Сплэш эффект (ripple) будет автоматически цвета onSurface (или primary при выделении)
           child: Stack(
             children: [
               SizedBox(
@@ -74,7 +71,6 @@ class NoteCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Картинка (Edge-to-edge)
                     if (note.imagePaths.isNotEmpty)
                       _NoteImage(
                         imagePath: note.imagePaths.first,
@@ -82,39 +78,35 @@ class NoteCard extends StatelessWidget {
                       ),
                     
                     Padding(
-                      padding: const EdgeInsets.all(12), // Сниженный отступ
+                      padding: const EdgeInsets.all(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Заголовок и бейдж картинок
-                          if (note.title.isNotEmpty || note.imagePaths.length > 1) ...[
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: tt.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w500,
-                                      color: scheme.onSurface,
-                                    ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: tt.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: scheme.onSurface,
                                   ),
                                 ),
-                                if (note.imagePaths.length > 1) ...[
-                                  const SizedBox(width: 8),
-                                  _ImageCountBadge(
-                                    count: note.imagePaths.length,
-                                    scheme: scheme,
-                                  ),
-                                ],
+                              ),
+                              if (note.imagePaths.length > 1) ...[
+                                const SizedBox(width: 8),
+                                _ImageCountBadge(
+                                  count: note.imagePaths.length,
+                                  scheme: scheme,
+                                ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                          ],
+                            ],
+                          ),
+                          const SizedBox(height: 8),
                           
-                          // Текст заметки (увеличенные maxLines для разницы в размерах)
                           Text(
                             content,
                             maxLines: compact
@@ -127,16 +119,18 @@ class NoteCard extends StatelessWidget {
                             ),
                           ),
                           
-                          // Теги
-                          if (note.tags.isNotEmpty) ...[
+                          if (isAIEdited || note.tags.isNotEmpty) ...[
                             const SizedBox(height: 12),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
-                              children: note.tags
-                                  .take(compact ? 2 : 4)
-                                  .map((tag) => _TagChip(label: tag, scheme: scheme))
-                                  .toList(),
+                              children: [
+                                if (isAIEdited)
+                                  _AITagChip(scheme: scheme),
+                                ...note.tags
+                                    .take(compact ? 2 : 4)
+                                    .map((tag) => _TagChip(label: tag, scheme: scheme)),
+                              ],
                             ),
                           ],
                         ],
@@ -146,23 +140,21 @@ class NoteCard extends StatelessWidget {
                 ),
               ),
 
-              // Идеальное нативное выделение (как в Google Photos / Keep на Android 15)
               if (isSelected) ...[
                 Positioned.fill(
                   child: IgnorePointer(
                     child: ColoredBox(
-                      // Легкая тонировка поверх всей карточки
                       color: scheme.primary.withValues(alpha: 0.12),
                     ),
                   ),
                 ),
                 Positioned(
-                  top: 12,
-                  right: 12,
+                  top: 10,
+                  right: 10,
                   child: Icon(
-                    Icons.check_circle, // Нативная залитая галочка Material
+                    Icons.check_circle,
                     color: scheme.primary,
-                    size: 24,
+                    size: 28,
                   ),
                 ),
               ],
@@ -185,7 +177,7 @@ class _NoteImage extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return AspectRatio(
-      aspectRatio: compact ? 16 / 9 : 4 / 3, // Крупнее изображения
+      aspectRatio: compact ? 16 / 9 : 4 / 3,
       child: imagePath.startsWith('http')
           ? CachedNetworkImage(
               imageUrl: imagePath,
@@ -253,7 +245,7 @@ class _ImageCountBadge extends StatelessWidget {
             style: TextStyle(
               color: scheme.onSecondaryContainer,
               fontSize: 12,
-              fontWeight: FontWeight.w500, // Убрали жирность
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -270,7 +262,6 @@ class _TagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // В Android 15 чипы имеют скругление 8 dp и цвет secondaryContainer
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -278,7 +269,7 @@ class _TagChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        label, // Хештег '#' убрали, так как в Android теги пишутся без него (в чипах)
+        label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -286,6 +277,39 @@ class _TagChip extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
+      ),
+    );
+  }
+}
+
+class _AITagChip extends StatelessWidget {
+  final ColorScheme scheme;
+
+  const _AITagChip({required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: 0.7), // Мягкий пастельный
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.auto_awesome, size: 12, color: scheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            'AI',
+            style: TextStyle(
+              color: scheme.primary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
       ),
     );
   }

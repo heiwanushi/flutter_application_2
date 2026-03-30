@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -63,7 +64,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   DateTime? _eventAt;
   int _reminderMinutes = 10;
   NoteRepeatMode _repeatMode = NoteRepeatMode.none;
+  String? _originalContent;
   bool _isAIProcessing = false;
+  bool _isPreviewMode = false;
   bool _canPop = false;
   bool _isSaving = false;
 
@@ -86,6 +89,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _eventAt = n?.eventAt;
     _reminderMinutes = n?.reminderMinutes ?? 10;
     _repeatMode = n?.repeatMode ?? NoteRepeatMode.none;
+    _originalContent = n?.originalContent;
+    
+    _isPreviewMode = n != null;
 
     _recordHistory(immediate: true);
     _titleCtrl.addListener(_onTextChanged);
@@ -118,6 +124,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         _eventAt == n.eventAt &&
         _reminderMinutes == (n.reminderMinutes ?? 10) &&
         _repeatMode == n.repeatMode &&
+        _originalContent == n.originalContent &&
         listEquals(_tags, n.tags) &&
         listEquals(_imagePaths, n.imagePaths));
   }
@@ -217,6 +224,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           eventAt: _eventAt,
           reminderMinutes: _eventAt == null ? null : _reminderMinutes,
           repeatMode: _repeatMode,
+          originalContent: _originalContent,
         );
       } else {
         final oldNote = widget.note!;
@@ -227,7 +235,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             !listEquals(_tags, oldNote.tags) ||
             _eventAt != oldNote.eventAt ||
             _reminderMinutes != (oldNote.reminderMinutes ?? 10) ||
-            _repeatMode != oldNote.repeatMode;
+            _repeatMode != oldNote.repeatMode ||
+            _originalContent != oldNote.originalContent;
 
         if (imageChanged || contentChanged) {
           savedNote = await notifier.editNote(
@@ -242,6 +251,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             calendarId: oldNote.calendarId,
             repeatMode: _repeatMode,
             clearEvent: _eventAt == null,
+            originalContent: _originalContent,
           );
         } else {
           savedNote = oldNote;
@@ -451,6 +461,73 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     );
   }
 
+  Future<void> _aiProcessText(Future<String?> Function() action) async {
+    if (_contentCtrl.text.trim().isEmpty) return;
+
+    setState(() => _isAIProcessing = true);
+
+    try {
+      final result = await action();
+      if (!mounted) return;
+
+      if (result != null) {
+        if (_originalContent == null) {
+          _originalContent = _contentCtrl.text;
+        }
+
+        _ignoreHistory = true;
+        _contentCtrl.text = result;
+        _ignoreHistory = false;
+        _recordHistory(immediate: true);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Готово ✨')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка AI: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isAIProcessing = false);
+      }
+    }
+  }
+
+  void _showOriginalDialog() {
+    if (_originalContent == null) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Оригинал заметки'),
+        content: SingleChildScrollView(
+          child: Text(_originalContent!),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Закрыть'),
+          ),
+          FilledButton.tonal(
+            onPressed: () {
+              setState(() {
+                _ignoreHistory = true;
+                _contentCtrl.text = _originalContent!;
+                _ignoreHistory = false;
+                _recordHistory(immediate: true);
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('Восстановить'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final dir = await getApplicationDocumentsDirectory();
@@ -492,6 +569,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       setState(() => _isAIProcessing = false);
 
       if (result != null) {
+        if (_originalContent == null) {
+          _originalContent = rawText;
+        }
+
         _ignoreHistory = true;
         _titleCtrl.text = result.title;
         _contentCtrl.text = result.content;
@@ -533,10 +614,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final tt = theme.textTheme;
+    final bool isAIEdited = _originalContent != null;
+
     final noteBackground = _colorIndex != null
-        ? NoteColors.bg(_colorIndex!, Theme.of(context).brightness)
+        ? NoteColors.bg(_colorIndex!, theme.brightness)
         : scheme.surface;
     final pageColor = Color.alphaBlend(
       scheme.surface.withValues(alpha: 0.24),
@@ -624,18 +708,94 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             const SizedBox(width: 12),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _isAIProcessing ? null : _structurizeWithAI,
-          icon: _isAIProcessing
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                )
-              : const Icon(Icons.auto_awesome_rounded),
-          label: Text(_isAIProcessing ? 'Анализ...' : 'Сборка ИИ ✨'),
-          backgroundColor: scheme.tertiaryContainer,
-          foregroundColor: scheme.onTertiaryContainer,
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton.extended(
+              heroTag: 'mode_toggle',
+              onPressed: () => setState(() => _isPreviewMode = !_isPreviewMode),
+              backgroundColor: scheme.secondaryContainer,
+              foregroundColor: scheme.onSecondaryContainer,
+              icon: Icon(_isPreviewMode ? Icons.edit_rounded : Icons.visibility_rounded),
+              label: Text(_isPreviewMode ? 'Редактировать' : 'Просмотр'),
+            ),
+            const SizedBox(height: 12),
+            MenuAnchor(
+              style: MenuStyle(
+                shape: WidgetStatePropertyAll(
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                ),
+                elevation: const WidgetStatePropertyAll(6),
+                backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainerLow),
+              ),
+              builder: (context, controller, child) {
+                return FloatingActionButton.extended(
+                  heroTag: 'ai_tools',
+                  onPressed: _isAIProcessing ? null : () {
+                    if (controller.isOpen) {
+                      controller.close();
+                    } else {
+                      controller.open();
+                    }
+                  },
+                  icon: _isAIProcessing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.auto_awesome_rounded),
+                  label: Text(_isAIProcessing ? 'Анализ...' : 'AI Инструменты ✨'),
+                  backgroundColor: scheme.tertiaryContainer,
+                  foregroundColor: scheme.onTertiaryContainer,
+                );
+              },
+              menuChildren: [
+                _buildMenuItem(
+                  icon: Icons.auto_awesome_rounded,
+                  title: 'Сборка ИИ',
+                  subtitle: 'Анализ текста, подбор тегов и цвета',
+                  onPressed: _structurizeWithAI,
+                  scheme: scheme,
+                  tt: tt,
+                ),
+                _buildMenuItem(
+                  icon: Icons.auto_fix_high_rounded,
+                  title: 'Улучшить текст',
+                  subtitle: 'Профессиональная правка стиля и ясности',
+                  onPressed: () => _aiProcessText(() => ref.read(geminiServiceProvider).improveText(_contentCtrl.text)),
+                  scheme: scheme,
+                  tt: tt,
+                ),
+                _buildMenuItem(
+                  icon: Icons.spellcheck_rounded,
+                  title: 'Грамматика',
+                  subtitle: 'Исправление ошибок и знаков препинания',
+                  onPressed: () => _aiProcessText(() => ref.read(geminiServiceProvider).checkGrammar(_contentCtrl.text)),
+                  scheme: scheme,
+                  tt: tt,
+                ),
+                _buildMenuItem(
+                  icon: Icons.summarize_rounded,
+                  title: 'Сжать до главного',
+                  subtitle: 'Создание краткой выжимки сути из всего текста',
+                  onPressed: () => _aiProcessText(() => ref.read(geminiServiceProvider).summarize(_contentCtrl.text)),
+                  scheme: scheme,
+                  tt: tt,
+                ),
+                if (_originalContent != null)
+                  _buildMenuItem(
+                    icon: Icons.history_rounded,
+                    title: 'Оригинал',
+                    subtitle: 'Просмотр или восстановление первой версии',
+                    onPressed: _showOriginalDialog,
+                    scheme: scheme,
+                    tt: tt,
+                  ),
+              ],
+            ),
+          ],
         ),
         body: Stack(
           children: [
@@ -644,6 +804,46 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (isAIEdited)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer.withValues(alpha: 0.5), // Единое мягкое облачко
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.auto_awesome, size: 18, color: scheme.primary),
+                              const SizedBox(width: 10),
+                              Text(
+                                'ОБРАБОТАНО ИИ',
+                                style: TextStyle(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.8,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'ИИ может совершать ошибки. Проверяйте важную информацию.',
+                            style: tt.bodySmall?.copyWith(
+                              color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+                              fontSize: 11,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 EditorGallery(
                   imagePaths: _imagePaths,
                   onPickImage: _pickImage,
@@ -696,18 +896,33 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     ),
                   ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: _contentCtrl,
-                  maxLines: null,
-                  style: tt.bodyLarge?.copyWith(height: 1.6),
-                  decoration: InputDecoration(
-                    hintText: 'Начните писать заметку...',
-                    hintStyle: TextStyle(
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                if (_isPreviewMode)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: MarkdownBody(
+                      data: _contentCtrl.text,
+                      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                        p: tt.bodyLarge?.copyWith(height: 1.6),
+                        listBullet: tt.bodyLarge?.copyWith(height: 1.6),
+                        h1: tt.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                        h2: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                        h3: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    border: InputBorder.none,
+                  )
+                else
+                  TextField(
+                    controller: _contentCtrl,
+                    maxLines: null,
+                    style: tt.bodyLarge?.copyWith(height: 1.6),
+                    decoration: InputDecoration(
+                      hintText: 'Начните писать заметку...',
+                      hintStyle: TextStyle(
+                        color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                      border: InputBorder.none,
+                    ),
                   ),
-                ),
               ],
             ),
         ),
@@ -722,6 +937,48 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         ), // Stack
       ), // Scaffold
     ); // PopScope
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onPressed,
+    required ColorScheme scheme,
+    required TextTheme tt,
+  }) {
+    return MenuItemButton(
+      leadingIcon: Icon(icon, color: scheme.primary, size: 28),
+      onPressed: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        child: SizedBox(
+          width: 260,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: tt.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: tt.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontSize: 14,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

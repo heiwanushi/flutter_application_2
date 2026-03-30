@@ -34,6 +34,7 @@ class Note {
   final bool isCompleted;
   final bool isDeleted;
   final NoteRepeatMode repeatMode;
+  final String? originalContent;
 
   int get notificationId => id.hashCode.abs();
 
@@ -55,6 +56,7 @@ class Note {
     this.isCompleted = false,
     this.isDeleted = false,
     this.repeatMode = NoteRepeatMode.none,
+    this.originalContent,
   });
 
   Note copyWith({
@@ -73,6 +75,7 @@ class Note {
     bool? isCompleted,
     bool? isDeleted,
     NoteRepeatMode? repeatMode,
+    String? originalContent,
     bool clearColor = false,
     bool clearEvent = false,
   }) => Note(
@@ -97,6 +100,7 @@ class Note {
     isCompleted: isCompleted ?? this.isCompleted,
     isDeleted: isDeleted ?? this.isDeleted,
     repeatMode: repeatMode ?? this.repeatMode,
+    originalContent: originalContent ?? this.originalContent,
   );
 
   Map<String, dynamic> toJson() => {
@@ -117,6 +121,7 @@ class Note {
     'isCompleted': isCompleted,
     'isDeleted': isDeleted,
     'repeatMode': repeatMode.name,
+    'originalContent': originalContent,
   };
 
   factory Note.fromJson(Map<String, dynamic> json) => Note(
@@ -150,5 +155,6 @@ class Note {
       (e) => e.name == (json['repeatMode'] as String?),
       orElse: () => NoteRepeatMode.none,
     ),
+    originalContent: json['originalContent'] as String?,
   );
 }

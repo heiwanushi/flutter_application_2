@@ -7,15 +7,38 @@ import '../../../core/services/settings_service.dart';
 import '../../notes/screens/archive_screen.dart';
 import '../../notes/screens/trash_screen.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  late TextEditingController _apiKeyCtrl;
+  bool _obscureKey = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiKeyCtrl = TextEditingController(text: ref.read(fallbackApiKeyProvider) ?? '');
+  }
+
+  @override
+  void dispose() {
+    _apiKeyCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final currentTheme = ref.watch(themeModeProvider);
     final currentAccent = ref.watch(accentColorProvider);
+    final currentModel = ref.watch(aiModelProvider);
+    final useFallbackKey = ref.watch(useFallbackApiKeyProvider);
     final userAsync = ref.watch(authStateProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -67,6 +90,92 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const Divider(height: 32),
+          _SectionTitle(title: 'ИСКУССТВЕННЫЙ ИНТЕЛЛЕКТ'),
+          _ModelTile(
+            model: AIModel.gemini,
+            title: 'Gemini',
+            subtitle: 'Рекомендовано для обработки заметок',
+            icon: Icons.auto_awesome_rounded,
+            isSelected: currentModel == AIModel.gemini,
+            onTap: () async {
+              ref.read(aiModelProvider.notifier).state = AIModel.gemini;
+              await ref.read(settingsServiceProvider).saveAIModel(AIModel.gemini);
+            },
+          ),
+          _ModelTile(
+            model: AIModel.qwen,
+            title: 'Qwen',
+            subtitle: 'Мощная альтернативная модель',
+            icon: Icons.psychology_rounded,
+            isSelected: currentModel == AIModel.qwen,
+            isLocked: true,
+            statusLabel: 'В РАЗРАБОТКЕ',
+            onTap: null,
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: useFallbackKey 
+                    ? colorScheme.primaryContainer.withValues(alpha: 0.2) 
+                    : colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: useFallbackKey ? colorScheme.primary : colorScheme.outlineVariant,
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      'Использовать свой ключ',
+                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Для прямого доступа к API Studio',
+                      style: tt.bodySmall,
+                    ),
+                    secondary: Icon(Icons.vpn_key_rounded, color: useFallbackKey ? colorScheme.primary : null),
+                    value: useFallbackKey,
+                    onChanged: (val) async {
+                      ref.read(useFallbackApiKeyProvider.notifier).state = val;
+                      await ref.read(settingsServiceProvider).saveUseFallbackApiKey(val);
+                    },
+                  ),
+                  if (useFallbackKey) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _apiKeyCtrl,
+                      obscureText: _obscureKey,
+                      decoration: InputDecoration(
+                        hintText: 'Введите ваш API ключ',
+                        isDense: true,
+                        fillColor: colorScheme.surface,
+                        filled: true,
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
+                          onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onChanged: (val) async {
+                        ref.read(fallbackApiKeyProvider.notifier).state = val.isEmpty ? null : val;
+                        await ref.read(settingsServiceProvider).saveFallbackApiKey(val);
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 32),
           _SectionTitle(title: 'ДАННЫЕ'),
           ListTile(
             leading: Icon(Icons.inventory_2_rounded, color: colorScheme.primary),
@@ -95,7 +204,7 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Тема', style: Theme.of(context).textTheme.titleMedium),
+                Text('Тема', style: tt.titleMedium),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -115,7 +224,7 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text('Акцентный цвет', style: Theme.of(context).textTheme.titleMedium),
+                Text('Акцентный цвет', style: tt.titleMedium),
                 const SizedBox(height: 12),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -179,7 +288,96 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-// Вспомогательный виджет для заголовков секций (Material Design)
+class _ModelTile extends StatelessWidget {
+  final AIModel model;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool isSelected;
+  final bool isLocked;
+  final String? statusLabel;
+  final VoidCallback? onTap;
+
+  const _ModelTile({
+    required this.model,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.isSelected,
+    this.isLocked = false,
+    this.statusLabel,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return ListTile(
+      enabled: !isLocked,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? scheme.primaryContainer
+              : scheme.surfaceContainerHighest.withValues(alpha: isLocked ? 0.4 : 1.0),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(
+          icon,
+          color: isSelected
+              ? scheme.onPrimaryContainer
+              : scheme.onSurfaceVariant.withValues(alpha: isLocked ? 0.4 : 1.0),
+        ),
+      ),
+      title: Row(
+        children: [
+          Text(
+            title,
+            style: tt.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: isLocked ? scheme.onSurface.withValues(alpha: 0.4) : null,
+            ),
+          ),
+          if (statusLabel != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                statusLabel!,
+                style: tt.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 9,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      subtitle: Text(
+        subtitle,
+        style: tt.bodySmall?.copyWith(
+          color: isLocked ? scheme.onSurface.withValues(alpha: 0.3) : scheme.onSurfaceVariant,
+        ),
+      ),
+      trailing: isLocked
+          ? const Icon(Icons.lock_outline_rounded, size: 20)
+          : isSelected
+              ? Icon(Icons.check_circle_rounded, color: scheme.primary)
+              : null,
+      onTap: onTap,
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   final String title;
 
@@ -188,7 +386,7 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 16, bottom: 8, top: 8),
+      padding: const EdgeInsets.only(left: 16, bottom: 8, top: 16),
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -201,7 +399,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-// Виджет выбора цвета (стандартный Material кружок с галочкой)
 class _ColorSwatch extends StatelessWidget {
   final Color color;
   final bool isSelected;
