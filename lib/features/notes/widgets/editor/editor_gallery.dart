@@ -138,10 +138,12 @@ class ImageThumb extends StatelessWidget {
         imageUrl: path,
         height: 180,
         fit: BoxFit.cover,
+        fadeInDuration: const Duration(milliseconds: 250),
+        fadeOutDuration: const Duration(milliseconds: 250),
+        memCacheHeight: 400,
         placeholder: (ctx, url) => Container(
           height: 180,
-          color: Colors.black12,
-          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          color: Colors.black.withValues(alpha: 0.05),
         ),
         errorWidget: (ctx, url, error) => const SizedBox.shrink(),
       );
@@ -223,8 +225,10 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           if (path.startsWith('http')) {
             imageWidget = CachedNetworkImage(
               imageUrl: path,
-              placeholder: (ctx, url) => const Center(
-                child: CircularProgressIndicator(strokeWidth: 2),
+              fadeInDuration: const Duration(milliseconds: 250),
+              fadeOutDuration: const Duration(milliseconds: 250),
+              placeholder: (ctx, url) => Container(
+                color: Colors.black.withValues(alpha: 0.2),
               ),
               errorWidget: (ctx, url, error) => const Icon(
                 Icons.broken_image,

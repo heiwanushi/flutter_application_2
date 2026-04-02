@@ -150,10 +150,19 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 error: (e, _) => Center(child: Text('Ошибка: $e')),
                 data: (notes) {
                   if (notes.isEmpty) {
-                    return EmptyPlaceholder(
-                      scheme: scheme,
-                      tt: tt,
-                      hasTagFilter: selectedTag != null,
+                    return RefreshIndicator(
+                      onRefresh: () =>
+                          ref.read(notesProvider.notifier).refreshSync(),
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          EmptyPlaceholder(
+                            scheme: scheme,
+                            tt: tt,
+                            hasTagFilter: selectedTag != null,
+                          ),
+                        ],
+                      ),
                     );
                   }
 
@@ -165,10 +174,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                       .toList(growable: false);
 
                   return RefreshIndicator(
-                    onRefresh: () async {
-                      ref.invalidate(notesProvider);
-                      await ref.read(notesProvider.future);
-                    },
+                    onRefresh: () =>
+                        ref.read(notesProvider.notifier).refreshSync(),
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
                       children: [

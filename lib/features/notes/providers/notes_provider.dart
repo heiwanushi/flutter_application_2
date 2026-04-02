@@ -28,37 +28,55 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
   Future<List<Note>> build() async {
     final user = ref.watch(authStateProvider).value;
     final localNotes = await _localRepo.loadAll();
+
     if (user != null) {
-      try {
-        final cloudNotes = await FirestoreRepository(user.uid).fetchNotes();
-        // Все заметки из облака считаются синхронизированными
-        final syncedCloudNotes = cloudNotes
-            .map((n) => n.copyWith(isNoteSynced: true))
-            .toList();
-        final cloudIds = syncedCloudNotes.map((n) => n.id).toSet();
-        final toSync = localNotes
-            .where((n) => !cloudIds.contains(n.id))
-            .toList();
-        final syncedNotes = <Note>[];
-        for (final note in toSync) {
-          // Синхронизируем с загрузкой картинок
-          await _performFullCloudSync(user.uid, note);
-          // После синхронизации получаем актуальную версию заметки из облака
-          final synced = await FirestoreRepository(
-            user.uid,
-          ).fetchNoteById(note.id);
-          if (synced != null) {
-            syncedNotes.add(synced.copyWith(isNoteSynced: true));
-          }
-        }
-        final allNotes = [...syncedCloudNotes, ...syncedNotes];
-        await _localRepo.saveAll(allNotes);
-        return allNotes;
-      } catch (e) {
-        return localNotes;
+      // Запускаем синхронизацию в фоне, не блокируя UI
+      _backgroundSync(user.uid, localNotes);
+    }
+
+    return localNotes;
+  }
+
+  // Публичный метод для ручного обновления (pull-to-refresh)
+  Future<void> refreshSync() async {
+    final user = ref.read(authStateProvider).value;
+    if (user == null) return;
+    await _backgroundSync(user.uid, state.value ?? []);
+  }
+
+  Future<void> _backgroundSync(String uid, List<Note> initialNotes) async {
+    try {
+      final remoteRepo = FirestoreRepository(uid);
+      final cloudNotes = await remoteRepo.fetchNotes();
+      final cloudIds = cloudNotes.map((n) => n.id).toSet();
+
+      // Используем актуальное состояние, если оно уже изменилось пока мы шли в облако
+      final currentLocal = state.value ?? initialNotes;
+
+      // 1. Заметки, помеченные как синхронизированные, но отсутствующие в облаке.
+      // Это означает, что они были удалены на другом устройстве.
+
+      // 2. Новые локальные заметки, которых еще нет в облаке
+      final notesToUpload =
+          currentLocal.where((n) => !n.isNoteSynced && !cloudIds.contains(n.id));
+
+      // 3. Облачные заметки помечаем как синхронизированные
+      final syncedCloudNotes =
+          cloudNotes.map((n) => n.copyWith(isNoteSynced: true)).toList();
+
+      // 4. Формируем финальный список: все из облака + новые локальные
+      final finalNotes = [...syncedCloudNotes, ...notesToUpload];
+
+      // Обновляем состояние и локальное хранилище
+      state = AsyncData(finalNotes);
+      await _localRepo.saveAll(finalNotes);
+
+      // 5. Запускаем загрузку новых локальных заметок в облако
+      for (final note in notesToUpload) {
+        _performFullCloudSync(uid, note);
       }
-    } else {
-      return localNotes;
+    } catch (e) {
+      debugPrint('Ошибка фоновой синхронизации: $e');
     }
   }
 

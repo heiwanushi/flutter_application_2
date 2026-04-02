@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/services/notification_service.dart';
@@ -32,6 +33,7 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FirebaseAppCheck.instance.activate(
+    // ignore: deprecated_member_use
     androidProvider: AndroidProvider.playIntegrity,
   );
 
@@ -74,16 +76,19 @@ class App extends ConsumerStatefulWidget {
 class _AppState extends ConsumerState<App> {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
+  StreamSubscription<List<SharedMediaFile>>? _intentDataStreamSubscription;
 
   @override
   void initState() {
     super.initState();
     _initDeepLinks();
+    _initSharingIntent();
   }
 
   @override
   void dispose() {
     _linkSubscription?.cancel();
+    _intentDataStreamSubscription?.cancel();
     super.dispose();
   }
 
@@ -96,7 +101,93 @@ class _AppState extends ConsumerState<App> {
     });
   }
 
+  void _initSharingIntent() {
+    // Handling media AND Text/URLs shared while app is in memory
+    _intentDataStreamSubscription =
+        ReceiveSharingIntent.instance.getMediaStream().listen((value) {
+      if (value.isNotEmpty) {
+        _handleSharedMedia(value);
+      }
+    }, onError: (err) {
+      debugPrint("getMediaStream error: $err");
+    });
+
+    // Handling media AND Text/URLs shared while app is closed
+    ReceiveSharingIntent.instance.getInitialMedia().then((value) {
+      if (value.isNotEmpty) {
+        _handleSharedMedia(value);
+      }
+    });
+  }
+
+  void _handleSharedMedia(List<SharedMediaFile> media) async {
+    if (media.isEmpty) return;
+
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null) return;
+
+    // Reset to first tab (Notes)
+    ref.read(navIndexProvider.notifier).state = 0;
+    await Future<void>.delayed(Duration.zero);
+
+    String? path;
+    String? text;
+
+    for (var file in media) {
+      if (file.type == SharedMediaType.image) {
+        path = file.path;
+      } else if (file.type == SharedMediaType.text ||
+          file.type == SharedMediaType.url) {
+        text = file.path;
+      }
+    }
+
+    if (path != null || text != null) {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => NoteEditorScreen(
+            initialImagePath: path,
+            initialText: text,
+          ),
+        ),
+      );
+    }
+    
+    ReceiveSharingIntent.instance.reset();
+  }
+
   Future<void> _handleIncomingLink(Uri? uri) async {
+    if (uri == null) return;
+
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null || !mounted) return;
+
+    // Handle "New Note" from Widget
+    if (uri.scheme == 'notesapp' && uri.host == 'new') {
+      ref.read(navIndexProvider.notifier).state = 0;
+      await Future<void>.delayed(Duration.zero);
+      navigator.push(
+        MaterialPageRoute(builder: (_) => const NoteEditorScreen()),
+      );
+      return;
+    }
+
+    // Handle "Screenshot & Note" from Tile
+    if (uri.scheme == 'notesapp' && uri.host == 'screenshot') {
+      final path = uri.queryParameters['path'];
+      if (path != null) {
+        ref.read(navIndexProvider.notifier).state = 0;
+        await Future<void>.delayed(Duration.zero);
+        navigator.push(
+          MaterialPageRoute(
+            builder: (_) => NoteEditorScreen(initialImagePath: path),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Handle existing note deep link
     final noteId = extractNoteIdFromDeepLink(uri);
     if (noteId == null) return;
 
@@ -105,9 +196,6 @@ class _AppState extends ConsumerState<App> {
     if (note == null) return;
 
     ref.read(navIndexProvider.notifier).state = 0;
-
-    final navigator = appNavigatorKey.currentState;
-    if (navigator == null || !mounted) return;
 
     await Future<void>.delayed(Duration.zero);
     navigator.push(

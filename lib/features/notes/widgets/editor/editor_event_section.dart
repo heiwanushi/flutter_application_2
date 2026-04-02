@@ -6,6 +6,7 @@ class EditorEventSection extends StatelessWidget {
   final DateTime? eventAt;
   final int reminderMinutes;
   final NoteRepeatMode repeatMode;
+  final bool isCompleted;
   final VoidCallback onPickDateTime;
   final VoidCallback? onClear;
   final ValueChanged<int> onReminderChanged;
@@ -16,6 +17,7 @@ class EditorEventSection extends StatelessWidget {
     required this.eventAt,
     required this.reminderMinutes,
     required this.repeatMode,
+    required this.isCompleted,
     required this.onPickDateTime,
     required this.onClear,
     required this.onReminderChanged,
@@ -102,6 +104,7 @@ class EditorEventSection extends StatelessWidget {
                         : 'Выберите дату и время',
                     style: textTheme.bodyMedium?.copyWith(
                       color: eventAt != null ? scheme.onSurface : scheme.onSurfaceVariant,
+                      decoration: (eventAt != null && isCompleted) ? TextDecoration.lineThrough : null,
                     ),
                   ),
                 ],

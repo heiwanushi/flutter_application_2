@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="new_note_widget_name">Новая заметка</string>
+    <string name="new_note_widget_description">Быстрый переход к созданию новой заметки</string>
+</resources>

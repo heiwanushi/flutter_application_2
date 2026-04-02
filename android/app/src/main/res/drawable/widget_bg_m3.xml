@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- M3 Primary Container-like color (Soft Blue) -->
+    <solid android:color="#D3E4FF" />
+    <!-- M3 standard radius for widgets/cards -->
+    <corners android:radius="24dp" />
+</shape>

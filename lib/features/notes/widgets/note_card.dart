@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/utils/note_colors.dart';
 import '../../../data/models/note.dart';
@@ -42,8 +43,8 @@ class NoteCard extends StatelessWidget {
         ? NoteColors.bg(note.colorIndex!, theme.brightness)
         : scheme.surfaceContainerLow;
 
-    final String title = note.title.trim().isEmpty ? 'Без названия' : note.title;
-    final String content = note.content.trim().isEmpty ? 'Пустая заметка' : note.content.trim();
+    final String title = note.title.trim();
+    final String content = note.content.trim();
 
     return Hero(
       tag: '$heroTagPrefix${note.id}',
@@ -82,42 +83,57 @@ class NoteCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: tt.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: scheme.onSurface,
+                          if (title.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: tt.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: scheme.onSurface,
+                                        height: 1.2,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (note.imagePaths.length > 1) ...[
+                                    const SizedBox(width: 8),
+                                    _ImageCountBadge(
+                                      count: note.imagePaths.length,
+                                      scheme: scheme,
+                                    ),
+                                  ],
+                                ],
                               ),
-                              if (note.imagePaths.length > 1) ...[
-                                const SizedBox(width: 8),
-                                _ImageCountBadge(
-                                  count: note.imagePaths.length,
-                                  scheme: scheme,
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 8),
+                            )
+                          else if (note.imagePaths.length > 1) ...[
+                             Align(
+                               alignment: Alignment.centerRight,
+                               child: _ImageCountBadge(
+                                 count: note.imagePaths.length,
+                                 scheme: scheme,
+                               ),
+                             ),
+                             const SizedBox(height: 8),
+                          ],
                           
-                          Text(
-                            content,
-                            maxLines: compact
-                                ? (note.imagePaths.isNotEmpty ? 3 : 6)
-                                : (note.imagePaths.isNotEmpty ? 8 : 15),
-                            overflow: TextOverflow.ellipsis,
-                            style: tt.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              height: 1.4,
+                          if (content.isNotEmpty)
+                            Text(
+                              content,
+                              maxLines: compact
+                                  ? (note.imagePaths.isNotEmpty ? 5 : 10)
+                                  : (note.imagePaths.isNotEmpty ? 12 : 25),
+                              overflow: TextOverflow.ellipsis,
+                              style: tt.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                height: 1.5,
+                              ),
                             ),
-                          ),
                           
                           if (isAIEdited || note.tags.isNotEmpty) ...[
                             const SizedBox(height: 12),
@@ -127,6 +143,12 @@ class NoteCard extends StatelessWidget {
                               children: [
                                 if (isAIEdited)
                                   _AITagChip(scheme: scheme),
+                                if (note.eventAt != null)
+                                  _EventTagChip(
+                                    eventAt: note.eventAt!,
+                                    isCompleted: note.isCompleted,
+                                    scheme: scheme,
+                                  ),
                                 ...note.tags
                                     .take(compact ? 2 : 4)
                                     .map((tag) => _TagChip(label: tag, scheme: scheme)),
@@ -179,17 +201,17 @@ class _NoteImage extends StatelessWidget {
     return AspectRatio(
       aspectRatio: compact ? 16 / 9 : 4 / 3,
       child: imagePath.startsWith('http')
-          ? CachedNetworkImage(
-              imageUrl: imagePath,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => ColoredBox(
-                color: scheme.surfaceContainerHighest,
-                child: Center(
-                  child: CircularProgressIndicator(color: scheme.primary),
+            ? CachedNetworkImage(
+                imageUrl: imagePath,
+                fit: BoxFit.cover,
+                fadeInDuration: const Duration(milliseconds: 250),
+                fadeOutDuration: const Duration(milliseconds: 250),
+                memCacheWidth: 600,
+                placeholder: (context, url) => ColoredBox(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 ),
-              ),
-              errorWidget: (context, url, error) => _ImageFallback(scheme: scheme),
-            )
+                errorWidget: (context, url, error) => _ImageFallback(scheme: scheme),
+              )
           : Image.file(
               File(imagePath),
               fit: BoxFit.cover,
@@ -277,6 +299,51 @@ class _TagChip extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
+      ),
+    );
+  }
+}
+
+class _EventTagChip extends StatelessWidget {
+  final DateTime eventAt;
+  final bool isCompleted;
+  final ColorScheme scheme;
+
+  const _EventTagChip({
+    required this.eventAt,
+    required this.isCompleted,
+    required this.scheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.event_note_rounded,
+            size: 12,
+            color: scheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            DateFormat('dd.MM.yy HH:mm').format(eventAt),
+            style: TextStyle(
+              color: scheme.onPrimaryContainer,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              decoration: isCompleted ? TextDecoration.lineThrough : null,
+              decorationColor: scheme.onPrimaryContainer,
+              decorationThickness: 2,
+            ),
+          ),
+        ],
       ),
     );
   }

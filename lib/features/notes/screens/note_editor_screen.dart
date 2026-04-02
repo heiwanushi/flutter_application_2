@@ -31,6 +31,7 @@ class _NoteState {
   final DateTime? eventAt;
   final int reminderMinutes;
   final NoteRepeatMode repeatMode;
+  final bool isCompleted;
 
   _NoteState(
     this.title,
@@ -41,13 +42,16 @@ class _NoteState {
     this.eventAt,
     this.reminderMinutes,
     this.repeatMode,
+    this.isCompleted,
   );
 }
 
 class NoteEditorScreen extends ConsumerStatefulWidget {
   final Note? note;
+  final String? initialImagePath;
+  final String? initialText;
 
-  const NoteEditorScreen({super.key, this.note});
+  const NoteEditorScreen({super.key, this.note, this.initialImagePath, this.initialText});
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -64,6 +68,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   DateTime? _eventAt;
   int _reminderMinutes = 10;
   NoteRepeatMode _repeatMode = NoteRepeatMode.none;
+  bool _isCompleted = false;
   String? _originalContent;
   bool _isAIProcessing = false;
   bool _isPreviewMode = false;
@@ -80,7 +85,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     super.initState();
     final n = widget.note;
     _titleCtrl = TextEditingController(text: n?.title ?? '');
-    _contentCtrl = TextEditingController(text: n?.content ?? '');
+    _contentCtrl = TextEditingController(text: n?.content ?? widget.initialText ?? '');
     _tagCtrl = TextEditingController();
     _tags = List.from(n?.tags ?? []);
     _imagePaths = List.from(n?.imagePaths ?? []);
@@ -89,9 +94,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _eventAt = n?.eventAt;
     _reminderMinutes = n?.reminderMinutes ?? 10;
     _repeatMode = n?.repeatMode ?? NoteRepeatMode.none;
+    _isCompleted = n?.isCompleted ?? false;
     _originalContent = n?.originalContent;
     
     _isPreviewMode = n != null;
+
+    if (widget.initialImagePath != null) {
+      _imagePaths.add(widget.initialImagePath!);
+    }
 
     _recordHistory(immediate: true);
     _titleCtrl.addListener(_onTextChanged);
@@ -124,6 +134,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         _eventAt == n.eventAt &&
         _reminderMinutes == (n.reminderMinutes ?? 10) &&
         _repeatMode == n.repeatMode &&
+        _isCompleted == n.isCompleted &&
         _originalContent == n.originalContent &&
         listEquals(_tags, n.tags) &&
         listEquals(_imagePaths, n.imagePaths));
@@ -148,6 +159,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       _eventAt,
       _reminderMinutes,
       _repeatMode,
+      _isCompleted,
     );
 
     if (_history.isNotEmpty &&
@@ -157,6 +169,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         _history[_historyIndex].eventAt == newState.eventAt &&
         _history[_historyIndex].reminderMinutes == newState.reminderMinutes &&
         _history[_historyIndex].repeatMode == newState.repeatMode &&
+        _history[_historyIndex].isCompleted == newState.isCompleted &&
         listEquals(_history[_historyIndex].tags, newState.tags)) {
       return;
     }
@@ -199,6 +212,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _eventAt = s.eventAt;
     _reminderMinutes = s.reminderMinutes;
     _repeatMode = s.repeatMode;
+    _isCompleted = s.isCompleted;
     _ignoreHistory = false;
   }
 
@@ -262,6 +276,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         }
         if (_isPinned != oldNote.isPinned) {
           await notifier.togglePin(oldNote.id);
+        }
+        if (_isCompleted != oldNote.isCompleted) {
+          await notifier.toggleCompleted(oldNote.id);
         }
       }
 
@@ -418,6 +435,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                       eventAt: _eventAt,
                       reminderMinutes: _reminderMinutes,
                       repeatMode: _repeatMode,
+                      isCompleted: _isCompleted,
                       onPickDateTime: () async {
                         await _pickEventDateTime();
                         setDialogState(() {});
@@ -471,9 +489,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       if (!mounted) return;
 
       if (result != null) {
-        if (_originalContent == null) {
-          _originalContent = _contentCtrl.text;
-        }
+        _originalContent ??= widget.initialText;
 
         _ignoreHistory = true;
         _contentCtrl.text = result;
@@ -569,9 +585,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       setState(() => _isAIProcessing = false);
 
       if (result != null) {
-        if (_originalContent == null) {
-          _originalContent = rawText;
-        }
+        _originalContent ??= rawText;
 
         _ignoreHistory = true;
         _titleCtrl.text = result.title;
@@ -643,7 +657,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         backgroundColor: pageColor,
         appBar: AppBar(
           backgroundColor: pageColor,
-          leadingWidth: 56,
           titleSpacing: 0,
           leading: Padding(
             padding: const EdgeInsets.only(left: 8),
@@ -702,6 +715,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   ? scheme.primaryContainer
                   : scheme.surfaceContainerHighest,
               foregroundColor: _isPinned
+                  ? scheme.onPrimaryContainer
+                  : scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            _EditorIconButton(
+              icon: _isCompleted
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              onTap: () {
+                setState(() => _isCompleted = !_isCompleted);
+                _recordHistory(immediate: true);
+              },
+              color: _isCompleted
+                  ? scheme.primaryContainer
+                  : scheme.surfaceContainerHighest,
+              foregroundColor: _isCompleted
                   ? scheme.onPrimaryContainer
                   : scheme.onSurfaceVariant,
             ),
@@ -879,7 +908,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                         if (_eventAt != null)
                           Chip(
                             avatar: Icon(Icons.event, size: 16, color: scheme.primary),
-                            label: Text(DateFormat('dd.MM.yy HH:mm').format(_eventAt!)),
+                            label: Text(
+                              DateFormat('dd.MM.yy HH:mm').format(_eventAt!),
+                              style: TextStyle(
+                                decoration: _isCompleted ? TextDecoration.lineThrough : null,
+                                decorationColor: scheme.onPrimaryContainer,
+                                decorationThickness: 2,
+                              ),
+                            ),
                             backgroundColor: scheme.primaryContainer,
                             labelStyle: TextStyle(color: scheme.onPrimaryContainer, fontSize: 12, fontWeight: FontWeight.bold),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
