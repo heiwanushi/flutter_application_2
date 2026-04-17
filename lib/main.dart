@@ -5,6 +5,7 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -26,6 +27,13 @@ final appNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+  ));
+
   await Hive.initFlutter();
   await Hive.openBox<String>('notesBox');
   await NotificationService().init();
@@ -48,6 +56,7 @@ void main() async {
 
   final themeIndex = await settings.loadThemeIndex();
   final viewIndex = await settings.loadViewMode();
+  final mainModeIndex = await settings.loadMainMode();
   final sortIndex = await settings.loadSortMode();
   final sortAsc = await settings.loadSortAsc();
   final accentColor = await settings.loadAccentColor();
@@ -57,6 +66,9 @@ void main() async {
   container
       .read(viewModeProvider.notifier)
       .setInitial(ViewMode.values[viewIndex]);
+  container
+      .read(mainScreenModeProvider.notifier)
+      .setInitial(MainScreenMode.values[mainModeIndex]);
   container
       .read(sortModeProvider.notifier)
       .setInitial(SortMode.values[sortIndex]);

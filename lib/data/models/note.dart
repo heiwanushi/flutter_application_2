@@ -14,6 +14,43 @@ enum NoteRepeatMode {
   };
 }
 
+class NoteContact {
+  final String name;
+  final String phoneNumber;
+
+  const NoteContact({
+    required this.name,
+    required this.phoneNumber,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'phoneNumber': phoneNumber,
+  };
+
+  factory NoteContact.fromJson(Map<String, dynamic> json) {
+    // Handling potential variations from AI responses
+    final name = (json['name'] ?? json['displayName'] ?? 'Без имени').toString();
+    final phone = (json['phoneNumber'] ?? json['phone_number'] ?? json['phone'] ?? '').toString();
+    
+    return NoteContact(
+      name: name,
+      phoneNumber: phone,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NoteContact &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          phoneNumber == other.phoneNumber;
+
+  @override
+  int get hashCode => name.hashCode ^ phoneNumber.hashCode;
+}
+
 class Note {
   /// Считается синхронизированной, если isNoteSynced == true
   final bool isNoteSynced;
@@ -35,6 +72,7 @@ class Note {
   final bool isDeleted;
   final NoteRepeatMode repeatMode;
   final String? originalContent;
+  final List<NoteContact> contacts;
 
   int get notificationId => id.hashCode.abs();
 
@@ -57,6 +95,7 @@ class Note {
     this.isDeleted = false,
     this.repeatMode = NoteRepeatMode.none,
     this.originalContent,
+    this.contacts = const [],
   });
 
   Note copyWith({
@@ -76,6 +115,7 @@ class Note {
     bool? isDeleted,
     NoteRepeatMode? repeatMode,
     String? originalContent,
+    List<NoteContact>? contacts,
     bool clearColor = false,
     bool clearEvent = false,
   }) => Note(
@@ -101,6 +141,7 @@ class Note {
     isDeleted: isDeleted ?? this.isDeleted,
     repeatMode: repeatMode ?? this.repeatMode,
     originalContent: originalContent ?? this.originalContent,
+    contacts: contacts ?? this.contacts,
   );
 
   Map<String, dynamic> toJson() => {
@@ -122,6 +163,7 @@ class Note {
     'isDeleted': isDeleted,
     'repeatMode': repeatMode.name,
     'originalContent': originalContent,
+    'contacts': contacts.map((e) => e.toJson()).toList(),
   };
 
   factory Note.fromJson(Map<String, dynamic> json) => Note(
@@ -156,5 +198,10 @@ class Note {
       orElse: () => NoteRepeatMode.none,
     ),
     originalContent: json['originalContent'] as String?,
+    contacts:
+        (json['contacts'] as List<dynamic>?)
+            ?.map((e) => NoteContact.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
   );
 }

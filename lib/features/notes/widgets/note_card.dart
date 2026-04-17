@@ -135,7 +135,7 @@ class NoteCard extends StatelessWidget {
                               ),
                             ),
                           
-                          if (isAIEdited || note.tags.isNotEmpty) ...[
+                          if (isAIEdited || note.tags.isNotEmpty || note.contacts.isNotEmpty) ...[
                             const SizedBox(height: 12),
                             Wrap(
                               spacing: 8,
@@ -152,6 +152,9 @@ class NoteCard extends StatelessWidget {
                                 ...note.tags
                                     .take(compact ? 2 : 4)
                                     .map((tag) => _TagChip(label: tag, scheme: scheme)),
+                                ...note.contacts
+                                    .take(compact ? 1 : 3)
+                                    .map((c) => _ContactChip(contact: c, scheme: scheme)),
                               ],
                             ),
                           ],
@@ -299,6 +302,45 @@ class _TagChip extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
+      ),
+    );
+  }
+}
+
+class _ContactChip extends StatelessWidget {
+  final NoteContact contact;
+  final ColorScheme scheme;
+
+  const _ContactChip({required this.contact, required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.person_rounded,
+            size: 12,
+            color: scheme.tertiary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            contact.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: scheme.onTertiaryContainer,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

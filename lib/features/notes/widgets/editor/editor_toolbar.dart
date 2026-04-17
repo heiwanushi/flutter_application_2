@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../data/models/note.dart';
 import '../../../../core/utils/note_colors.dart';
 
 class EditorToolbar extends StatelessWidget {
@@ -9,6 +10,9 @@ class EditorToolbar extends StatelessWidget {
   final ValueChanged<String> onAddTag;
   final ValueChanged<String> onRemoveTag;
   final ValueChanged<int?> onColorChanged;
+  final List<NoteContact> contacts;
+  final VoidCallback onAddContact;
+  final ValueChanged<NoteContact> onRemoveContact;
   final ColorScheme scheme;
   final TextTheme tt;
 
@@ -20,6 +24,9 @@ class EditorToolbar extends StatelessWidget {
     required this.onAddTag,
     required this.onRemoveTag,
     required this.onColorChanged,
+    required this.contacts,
+    required this.onAddContact,
+    required this.onRemoveContact,
     required this.scheme,
     required this.tt,
   });
@@ -136,6 +143,37 @@ class EditorToolbar extends StatelessWidget {
                   ),
                   onSubmitted: onAddTag,
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Контакты',
+            style: tt.labelLarge?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ...contacts.map(
+                (c) => InputChip(
+                  avatar: const Icon(Icons.person_rounded, size: 14),
+                  label: Text(c.name, style: const TextStyle(fontSize: 12)),
+                  onDeleted: () => onRemoveContact(c),
+                  backgroundColor: scheme.tertiaryContainer.withValues(
+                    alpha: 0.32,
+                  ),
+                ),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Прикрепить', style: TextStyle(fontSize: 12)),
+                onPressed: onAddContact,
+                backgroundColor: scheme.surfaceContainerHighest,
               ),
             ],
           ),

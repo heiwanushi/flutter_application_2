@@ -64,7 +64,7 @@ class MainScreen extends ConsumerWidget {
           ),
           NavigationDestination(
             icon: Icon(Icons.search_rounded),
-            selectedIcon: Icon(Icons.manage_search_rounded),
+            selectedIcon: Icon(Icons.search_rounded),
             label: 'Поиск',
           ),
           NavigationDestination(

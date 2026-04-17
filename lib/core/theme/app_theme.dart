@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AppTheme {
   static ThemeData light(ColorScheme? dynamic) {
@@ -32,6 +33,12 @@ class AppTheme {
           elevation: 0,
           backgroundColor: scheme.surface,
           surfaceTintColor: Colors.transparent,
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness:
+                scheme.brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: scheme.brightness,
+          ),
         ),
         floatingActionButtonTheme: FloatingActionButtonThemeData(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_r)),

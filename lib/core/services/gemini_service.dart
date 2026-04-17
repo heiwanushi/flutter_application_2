@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:google_generative_ai/google_generative_ai.dart' as google_ai;
 
+import '../../data/models/note.dart';
 import '../../data/models/structured_note_data.dart';
 import '../services/settings_service.dart';
 
@@ -15,7 +16,7 @@ final geminiServiceProvider = Provider<GeminiService>((ref) {
 class GeminiService {
   final Ref _ref;
   late final GenerativeModel _primaryModel;
-  final String _modelName = 'gemini-2.5-flash';
+  final String _modelName = 'gemini-2.5-flash-lite';
 
   GeminiService(this._ref) {
     _primaryModel = FirebaseAI.googleAI().generativeModel(
@@ -39,7 +40,9 @@ class GeminiService {
 
   Future<String?> _generateViaFirebase(String prompt) async {
     try {
-      final response = await _primaryModel.generateContent([Content.text(prompt)]);
+      final response = await _primaryModel.generateContent([
+        Content.text(prompt),
+      ]);
       return response.text;
     } catch (e) {
       dev.log('GeminiService: Ошибка Firebase: $e');
@@ -52,10 +55,14 @@ class GeminiService {
       final fallbackModel = google_ai.GenerativeModel(
         model: _modelName,
         apiKey: apiKey,
-        generationConfig: google_ai.GenerationConfig(responseMimeType: 'application/json'),
+        generationConfig: google_ai.GenerationConfig(
+          responseMimeType: 'application/json',
+        ),
       );
-      
-      final response = await fallbackModel.generateContent([google_ai.Content.text(prompt)]);
+
+      final response = await fallbackModel.generateContent([
+        google_ai.Content.text(prompt),
+      ]);
       return response.text;
     } catch (e) {
       dev.log('GeminiService: Ошибка AI Studio: $e');
@@ -115,11 +122,24 @@ $content
     );
   }
 
-  Future<StructuredNoteData?> structureNote(String rawContent) async {
+  Future<StructuredNoteData?> structureNote(
+    String rawContent, {
+    List<NoteContact> userContacts = const [],
+  }) async {
     try {
       if (rawContent.trim().isEmpty) return null;
 
       final now = DateTime.now();
+
+      String contactsContext = '';
+      if (userContacts.isNotEmpty) {
+        final simplified = userContacts
+            .map((c) => {'name': c.name, 'phone': c.phoneNumber})
+            .toList();
+        contactsContext =
+            '\nСПРАВОЧНИК КОНТАКТОВ ПОЛЬЗОВАТЕЛЯ (используй для сопоставления):\n${jsonEncode(simplified)}\n';
+      }
+
       final prompt =
           '''
 Текущая дата и время системы: ${now.toIso8601String()}.
@@ -139,6 +159,8 @@ $content
 Если время (часы/минуты) не указано, выбери логичное время по умолчанию (например, 09:00 для утра).
 Если это событие, обязательно добавь напоминание: установи reminderMinutes (например, 15, 30, 60).
 
+$contactsContext
+
 Строго возвращай ТОЛЬКО JSON объект (без markdown) следующей схемы:
 {
   "title": "String",
@@ -146,8 +168,20 @@ $content
   "tags": ["String"],
   "colorIndex": 4,
   "eventAt": "2024-05-20T18:00:00.000Z", // null if no event
-  "reminderMinutes": 30 // null if no event
+  "reminderMinutes": 30, // null if no event
+  "contacts": [
+    {
+      "name": "Имя",
+      "phoneNumber": "+79991234567"
+    }
+  ]
 }
+
+Извлеки контакты (имена и телефоны). Твоя КРИТИЧЕСКАЯ задача — сопоставить упомянутых людей с справочником.
+1. СНАЧАЛА проверь, есть ли упомянутое имя в СПРАВОЧНИКЕ КОНТАКТОВ ПОЛЬЗОВАТЕЛЯ. Если есть, ОБЯЗАТЕЛЬНО используй данные оттуда.
+2. НЕ выдумывай новые контакты для обычных имен, если в тексте нет явного указания на создание контакта (например, "запиши номер", "новый контакт", "вот его телефон") или если рядом нет номера телефона.
+3. Если номер телефона есть в тексте, привяжи его к контакту.
+4. Если номера телефона НЕТ и человека нет в справочнике, НЕ добавляй его в список contacts, даже если это имя. Мы добавляем только реальные контакты для связи.
 
 Проанализируй следующий текст заметки:
 $rawContent
@@ -162,6 +196,7 @@ $rawContent
           .replaceAll('```json', '')
           .replaceAll('```', '')
           .trim();
+      dev.log('GeminiService: Raw AI JSON response: $jsonStr');
       final Map<String, dynamic> jsonMap = jsonDecode(jsonStr);
       return StructuredNoteData.fromJson(jsonMap);
     } catch (e) {

@@ -9,7 +9,24 @@ import 'notes_provider.dart';
 
 enum ViewMode { grid, list }
 
+enum MainScreenMode { feed, folders }
+
 enum SortMode { updatedAt, createdAt, title }
+
+final mainScreenModeProvider = NotifierProvider<MainScreenModeNotifier, MainScreenMode>(
+  MainScreenModeNotifier.new,
+);
+
+class MainScreenModeNotifier extends Notifier<MainScreenMode> {
+  @override
+  MainScreenMode build() => MainScreenMode.feed;
+  void toggle() {
+    state = state == MainScreenMode.feed ? MainScreenMode.folders : MainScreenMode.feed;
+    ref.read(settingsServiceProvider).saveMainMode(state.index);
+  }
+
+  void setInitial(MainScreenMode mode) => state = mode;
+}
 
 final viewModeProvider = NotifierProvider<ViewModeNotifier, ViewMode>(
   ViewModeNotifier.new,

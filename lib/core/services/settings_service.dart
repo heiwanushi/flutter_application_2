@@ -23,6 +23,7 @@ class SettingsService {
   static const _aiModelKey = 'ai_model_index';
   static const _fallbackApiKey = 'fallback_api_key';
   static const _useFallbackApiKey = 'use_fallback_api_key_bool';
+  static const _mainModeKey = 'main_mode_index';
 
   Future<void> saveThemeIndex(int index) async {
     final prefs = await SharedPreferences.getInstance();
@@ -42,6 +43,16 @@ class SettingsService {
   Future<int> loadViewMode() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_viewModeKey) ?? 0;
+  }
+
+  Future<void> saveMainMode(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_mainModeKey, index);
+  }
+
+  Future<int> loadMainMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_mainModeKey) ?? 0;
   }
 
   Future<void> saveSortMode(int index) async {

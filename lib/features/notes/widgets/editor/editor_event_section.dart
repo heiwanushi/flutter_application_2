@@ -114,7 +114,7 @@ class EditorEventSection extends StatelessWidget {
           if (eventAt != null) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
-              value: _reminderOptions.contains(reminderMinutes) ? reminderMinutes : 10,
+              initialValue: _reminderOptions.contains(reminderMinutes) ? reminderMinutes : 10,
               decoration: InputDecoration(
                 labelText: 'Напомнить за',
                 filled: true,
@@ -147,7 +147,7 @@ class EditorEventSection extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<NoteRepeatMode>(
-              value: repeatMode,
+              initialValue: repeatMode,
               decoration: InputDecoration(
                 labelText: 'Повтор',
                 filled: true,

@@ -9,6 +9,7 @@ import '../widgets/note_card.dart';
 import '../widgets/list/notes_header.dart';
 import '../widgets/list/notes_list_placeholders.dart';
 import '../widgets/list/selection_header.dart';
+import '../widgets/list/folder_card.dart';
 import 'note_editor_screen.dart';
 
 class NotesListScreen extends ConsumerStatefulWidget {
@@ -19,6 +20,8 @@ class NotesListScreen extends ConsumerStatefulWidget {
 }
 
 class _NotesListScreenState extends ConsumerState<NotesListScreen> {
+  final Set<String> _expandedFolders = {};
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -26,6 +29,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
     final notesAsync = ref.watch(filteredNotesProvider);
     final allNotesAsync = ref.watch(notesProvider);
+    final mainMode = ref.watch(mainScreenModeProvider);
     final viewMode = ref.watch(viewModeProvider);
     final sortMode = ref.watch(sortModeProvider);
     final sortAsc = ref.watch(sortAscProvider);
@@ -119,9 +123,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 key: const ValueKey('notes-header'),
                 sortMode: sortMode,
                 sortAsc: sortAsc,
+                mainMode: mainMode,
                 isGrid: isGrid,
-                allTags: allTags,
-                tagCounts: tagCounts,
                 selectedTag: selectedTag,
                 totalNotes: totalNotes,
                 scheme: scheme,
@@ -130,6 +133,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     ref.read(sortModeProvider.notifier).setMode(value),
                 onToggleSortDirection: () =>
                     ref.read(sortAscProvider.notifier).toggle(),
+                onToggleMainMode: () =>
+                    ref.read(mainScreenModeProvider.notifier).toggle(),
                 onToggleView: () =>
                     ref.read(viewModeProvider.notifier).toggle(),
                 onSelectTag: (tag) =>
@@ -145,7 +150,30 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
           children: [
             topAreaChild,
             Expanded(
-              child: notesAsync.when(
+              child: mainMode == MainScreenMode.folders
+                  ? allNotesAsync.when(
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (e, _) => Center(child: Text('Ошибка: $e')),
+                      data: (allNotesData) {
+                        return RefreshIndicator(
+                          onRefresh: () =>
+                              ref.read(notesProvider.notifier).refreshSync(),
+                          child: _buildFoldersView(
+                            context,
+                            allTags: allTags,
+                            tagCounts: tagCounts,
+                            scheme: scheme,
+                            allNotes: allNotesData,
+                            isGrid: isGrid,
+                            selectedIds: selectedIds,
+                            isSelectionMode: isSelectionMode,
+                            toggleSelect: toggleSelect,
+                            openView: openView,
+                          ),
+                        );
+                      },
+                    )
+                  : notesAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('Ошибка: $e')),
                 data: (notes) {
@@ -298,6 +326,99 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       onLongPress: () => toggleSelect(note.id),
       onDelete: () => ref.read(notesProvider.notifier).delete(note.id),
       onTogglePin: () => ref.read(notesProvider.notifier).togglePin(note.id),
+    );
+  }
+
+  Widget _buildFoldersView(
+    BuildContext context, {
+    required List<String> allTags,
+    required Map<String, int> tagCounts,
+    required ColorScheme scheme,
+    required List<Note> allNotes,
+    required bool isGrid,
+    required Set<String> selectedIds,
+    required bool isSelectionMode,
+    required void Function(String id) toggleSelect,
+    required void Function(Note note) openView,
+  }) {
+    if (allTags.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.6,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.folder_off_rounded, size: 64, color: scheme.surfaceContainerHighest),
+                const SizedBox(height: 16),
+                Text(
+                  'Нет папок',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          )
+        ],
+      );
+    }
+
+    Widget buildFolderCard(String tag) {
+      final count = tagCounts[tag] ?? 0;
+      final folderNotes = allNotes
+          .where((n) => n.tags.contains(tag) && !n.isDeleted)
+          .toList(growable: false);
+
+      folderNotes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      
+      final isExpanded = _expandedFolders.contains(tag);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FolderExpansionCard(
+            tag: tag,
+            count: count,
+            scheme: scheme,
+            isExpanded: isExpanded,
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedFolders.remove(tag);
+                } else {
+                  _expandedFolders.add(tag);
+                }
+              });
+            },
+          ),
+          if (isExpanded)
+            Padding(
+              padding: EdgeInsets.only(bottom: isGrid ? 12 : 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _buildNoteSection(
+                  context: context,
+                  notes: folderNotes,
+                  isGrid: isGrid,
+                  selectedIds: selectedIds,
+                  isSelectionMode: isSelectionMode,
+                  toggleSelect: toggleSelect,
+                  openView: openView,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: allTags.length,
+      itemBuilder: (context, index) => buildFolderCard(allTags[index]),
     );
   }
 }

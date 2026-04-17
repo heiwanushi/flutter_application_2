@@ -58,7 +58,7 @@ class ArchiveScreen extends ConsumerWidget {
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
             itemCount: notes.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (_, i) {
               final note = notes[i];
               return UpcomingEventCard(

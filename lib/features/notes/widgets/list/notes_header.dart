@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../providers/notes_filters_provider.dart';
-import 'notes_list_placeholders.dart';
 
 class NotesHeader extends StatelessWidget {
   final SortMode sortMode;
   final bool sortAsc;
+  final MainScreenMode mainMode;
   final bool isGrid;
-  final List<String> allTags;
-  final Map<String, int> tagCounts;
   final String? selectedTag;
   final int totalNotes;
   final ColorScheme scheme;
@@ -16,15 +14,15 @@ class NotesHeader extends StatelessWidget {
   final ValueChanged<SortMode> onChangeSortMode;
   final VoidCallback onToggleSortDirection;
   final VoidCallback onToggleView;
+  final VoidCallback onToggleMainMode;
   final ValueChanged<String?> onSelectTag;
 
   const NotesHeader({
     super.key,
     required this.sortMode,
     required this.sortAsc,
+    required this.mainMode,
     required this.isGrid,
-    required this.allTags,
-    required this.tagCounts,
     required this.selectedTag,
     required this.totalNotes,
     required this.scheme,
@@ -32,6 +30,7 @@ class NotesHeader extends StatelessWidget {
     required this.onChangeSortMode,
     required this.onToggleSortDirection,
     required this.onToggleView,
+    required this.onToggleMainMode,
     required this.onSelectTag,
   });
 
@@ -42,32 +41,25 @@ class NotesHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: SizedBox(
-              height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  TagFilterChip(
-                    label: '\u0412\u0441\u0435', // Все
-                    count: totalNotes,
-                    selected: selectedTag == null,
-                    scheme: scheme,
-                    compact: true,
-                    onTap: () => onSelectTag(null),
-                  ),
-                  ...allTags.map(
-                    (tag) => TagFilterChip(
-                      label: tag,
-                      count: tagCounts[tag] ?? 0,
-                      selected: selectedTag == tag,
-                      scheme: scheme,
-                      compact: true,
-                      onTap: () => onSelectTag(selectedTag == tag ? null : tag),
+            child: selectedTag == null
+                ? const SizedBox.shrink()
+                : Align(
+                    alignment: Alignment.centerLeft,
+                    child: InputChip(
+                      label: Text('#$selectedTag'),
+                      onDeleted: () => onSelectTag(null),
+                      deleteIcon: const Icon(Icons.close_rounded, size: 18),
+                      backgroundColor: scheme.primaryContainer,
+                      labelStyle: tt.bodyMedium?.copyWith(
+                        color: scheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: BorderSide.none,
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
           const SizedBox(width: 8),
           Row(
@@ -91,6 +83,39 @@ class NotesHeader extends StatelessWidget {
                 backgroundColor: scheme.primary,
                 iconColor: scheme.onPrimary,
                 onTap: onToggleView,
+              ),
+              const SizedBox(width: 4),
+              FilledButton.icon(
+                onPressed: onToggleMainMode,
+                icon: Icon(
+                  mainMode == MainScreenMode.folders
+                      ? Icons.folder_copy_rounded
+                      : Icons.dynamic_feed_rounded,
+                  size: 20,
+                  color: scheme.primary,
+                ),
+                label: Text(
+                  mainMode == MainScreenMode.folders ? 'Папки' : 'Лента',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700, 
+                    fontSize: 14,
+                    color: scheme.primary,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  backgroundColor: scheme.primaryContainer.withValues(alpha: 0.5),
+                  foregroundColor: scheme.onPrimaryContainer,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  side: BorderSide(
+                    color: scheme.primary.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
               ),
             ],
           ),
