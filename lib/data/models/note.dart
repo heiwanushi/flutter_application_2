@@ -75,6 +75,7 @@ class Note {
   final List<NoteContact> contacts;
 
   int get notificationId => id.hashCode.abs();
+  bool get isAiProcessed => tags.contains('AI');
 
   const Note({
     required this.id,

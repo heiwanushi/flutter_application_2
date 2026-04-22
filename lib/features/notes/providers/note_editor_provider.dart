@@ -233,7 +233,7 @@ class NoteEditorNotifier extends StateNotifier<NoteEditorState> {
       originalContent: original,
       title: title,
       content: content,
-      tags: tags,
+      tags: {...tags, 'AI'}.toList(),
       contacts: contacts,
       colorIndex: color,
       eventAt: event,

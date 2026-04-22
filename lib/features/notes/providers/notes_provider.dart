@@ -210,6 +210,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     bool clearEvent = false,
     String? originalContent,
     List<NoteContact>? contacts,
+    int? colorIndex,
   }) async {
     Note? updatedNote;
     final currentNotes = state.value ?? <Note>[];
@@ -246,6 +247,7 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
               clearEvent: clearEvent,
               originalContent: originalContent,
               contacts: contacts,
+              colorIndex: colorIndex ?? n.colorIndex,
             );
             return updatedNote!;
           })()

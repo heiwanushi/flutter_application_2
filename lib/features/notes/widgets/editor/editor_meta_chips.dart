@@ -51,7 +51,7 @@ class EditorMetaChips extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               side: BorderSide.none,
             ),
-          ...tags.map((t) => Chip(
+          ...tags.where((t) => t != 'AI').map((t) => Chip(
                 label: Text('#$t'),
                 backgroundColor: scheme.surfaceContainerHighest,
                 labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),

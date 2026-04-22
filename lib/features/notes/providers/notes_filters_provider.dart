@@ -80,7 +80,9 @@ final allTagsProvider = Provider<List<String>>((ref) {
   final notes = ref.watch(notesProvider).value ?? <Note>[];
   final tags = <String>{};
   for (final n in notes) {
-    tags.addAll(n.tags);
+    for (final tag in n.tags) {
+      if (tag != 'AI') tags.add(tag);
+    }
   }
   return tags.toList()..sort();
 });
@@ -91,6 +93,7 @@ final tagCountsProvider = Provider<Map<String, int>>((ref) {
 
   for (final note in notes) {
     for (final tag in note.tags) {
+      if (tag == 'AI') continue;
       counts[tag] = (counts[tag] ?? 0) + 1;
     }
   }

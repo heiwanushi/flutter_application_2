@@ -37,7 +37,6 @@ class NoteCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final tt = theme.textTheme;
 
-    final bool isAIEdited = note.originalContent != null;
     final bool hasCustomColor = note.colorIndex != null;
     final Color cardColor = hasCustomColor
         ? NoteColors.bg(note.colorIndex!, theme.brightness)
@@ -90,8 +89,24 @@ class NoteCard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
-                                    child: Text(
-                                      title,
+                                    child: Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          if (note.isAiProcessed)
+                                            WidgetSpan(
+                                              alignment: PlaceholderAlignment.middle,
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(right: 6),
+                                                child: Icon(
+                                                  Icons.auto_awesome,
+                                                  size: 16,
+                                                  color: scheme.primary,
+                                                ),
+                                              ),
+                                            ),
+                                          TextSpan(text: title),
+                                        ],
+                                      ),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: tt.titleMedium?.copyWith(
@@ -135,14 +150,12 @@ class NoteCard extends StatelessWidget {
                               ),
                             ),
                           
-                          if (isAIEdited || note.tags.isNotEmpty || note.contacts.isNotEmpty) ...[
+                          if (note.isAiProcessed || note.tags.any((t) => t != 'AI') || note.contacts.isNotEmpty) ...[
                             const SizedBox(height: 12),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                if (isAIEdited)
-                                  _AITagChip(scheme: scheme),
                                 if (note.eventAt != null)
                                   _EventTagChip(
                                     eventAt: note.eventAt!,
@@ -150,6 +163,7 @@ class NoteCard extends StatelessWidget {
                                     scheme: scheme,
                                   ),
                                 ...note.tags
+                                    .where((tag) => tag != 'AI')
                                     .take(compact ? 2 : 4)
                                     .map((tag) => _TagChip(label: tag, scheme: scheme)),
                                 ...note.contacts
@@ -391,35 +405,3 @@ class _EventTagChip extends StatelessWidget {
   }
 }
 
-class _AITagChip extends StatelessWidget {
-  final ColorScheme scheme;
-
-  const _AITagChip({required this.scheme});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer.withValues(alpha: 0.7), // Мягкий пастельный
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.auto_awesome, size: 12, color: scheme.primary),
-          const SizedBox(width: 6),
-          Text(
-            'AI',
-            style: TextStyle(
-              color: scheme.primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

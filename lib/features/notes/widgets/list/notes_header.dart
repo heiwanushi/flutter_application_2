@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../../screens/ai_batch_screen.dart';
 import '../../providers/notes_filters_provider.dart';
 
 class NotesHeader extends StatelessWidget {
@@ -65,6 +65,17 @@ class NotesHeader extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              CompactIconButton(
+                tooltip: 'Умная обработка',
+                icon: Icons.auto_awesome,
+                backgroundColor: scheme.secondaryContainer,
+                iconColor: scheme.onSecondaryContainer,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AiBatchScreen()),
+                ),
+              ),
+              const SizedBox(width: 4),
               SortMenuButton(
                 sortMode: sortMode,
                 sortAsc: sortAsc,

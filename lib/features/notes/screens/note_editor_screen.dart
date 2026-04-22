@@ -346,7 +346,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (state.originalContent != null) _AILabel(scheme: scheme, tt: tt),
+                  if (state.tags.contains('AI')) _AILabel(scheme: scheme, tt: tt),
                   EditorGallery(
                     imagePaths: state.imagePaths,
                     onPickImage: _pickImage,
