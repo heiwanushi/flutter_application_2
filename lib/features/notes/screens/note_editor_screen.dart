@@ -16,6 +16,7 @@ import '../../../core/utils/note_colors.dart';
 import '../../../data/models/note.dart';
 
 import '../providers/notes_provider.dart';
+import '../providers/notes_filters_provider.dart';
 import '../providers/note_editor_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../widgets/editor/editor_event_section.dart';
@@ -261,7 +262,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     try {
       final gemini = ref.read(geminiServiceProvider);
       final userContacts = await ref.read(allSystemContactsProvider.future).catchError((_) => <NoteContact>[]);
-      final result = await gemini.structureNote(rawText, userContacts: userContacts);
+      final existingFolders = ref.read(allTagsProvider);
+      final result = await gemini.structureNote(
+        rawText,
+        userContacts: userContacts,
+        existingFolders: existingFolders,
+      );
 
       if (!mounted) return;
       notifier.setAIProcessing(false);

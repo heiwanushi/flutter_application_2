@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/gemini_service.dart';
 import '../../notes/providers/notes_provider.dart';
 import '../../notes/providers/contacts_provider.dart';
+import '../../notes/providers/notes_filters_provider.dart';
 
 enum AiBatchStatus { idle, processing, completed, error }
 
@@ -119,9 +120,11 @@ class AiBatchNotifier extends StateNotifier<AiBatchState> {
       );
 
       try {
+        final existingFolders = _ref.read(allTagsProvider);
         final results = await gemini.structureNotesBatch(
           chunk,
           userContacts: userContacts,
+          existingFolders: existingFolders,
         );
 
         for (final note in chunk) {

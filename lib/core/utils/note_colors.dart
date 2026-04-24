@@ -22,8 +22,21 @@ class NoteColors {
 
   static int get count => _palette.length;
 
-  static const icons = [
-    Icons.circle, Icons.circle, Icons.circle, Icons.circle,
-    Icons.circle, Icons.circle, Icons.circle, Icons.circle,
-  ];
+  static const categoryNames = {
+    0: "Идеи и заметки",
+    1: "Срочное и важное",
+    2: "Продукты и здоровье",
+    3: "Работа и учеба",
+    4: "Хобби и отдых",
+    5: "Встречи и события",
+    6: "Финансы и бизнес",
+    7: "Личное и семья",
+  };
+
+  static int? fromCategoryName(String name) {
+    for (final entry in categoryNames.entries) {
+      if (entry.value == name) return entry.key;
+    }
+    return null;
+  }
 }

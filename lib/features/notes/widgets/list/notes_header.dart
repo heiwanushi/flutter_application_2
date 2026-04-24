@@ -16,6 +16,7 @@ class NotesHeader extends StatelessWidget {
   final VoidCallback onToggleView;
   final VoidCallback onToggleMainMode;
   final ValueChanged<String?> onSelectTag;
+  final VoidCallback? onCollapseAll;
 
   const NotesHeader({
     super.key,
@@ -32,6 +33,7 @@ class NotesHeader extends StatelessWidget {
     required this.onToggleView,
     required this.onToggleMainMode,
     required this.onSelectTag,
+    this.onCollapseAll,
   });
 
   @override
@@ -40,62 +42,68 @@ class NotesHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       child: Row(
         children: [
-          Expanded(
-            child: selectedTag == null
-                ? const SizedBox.shrink()
-                : Align(
-                    alignment: Alignment.centerLeft,
-                    child: InputChip(
-                      label: Text('#$selectedTag'),
-                      onDeleted: () => onSelectTag(null),
-                      deleteIcon: const Icon(Icons.close_rounded, size: 18),
-                      backgroundColor: scheme.primaryContainer,
-                      labelStyle: tt.bodyMedium?.copyWith(
-                        color: scheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      side: BorderSide.none,
-                    ),
-                  ),
+          FilledButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AiBatchScreen()),
+            ),
+            icon: const Icon(Icons.auto_awesome, size: 18),
+            label: const Text('AI', style: TextStyle(fontWeight: FontWeight.bold)),
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.secondaryContainer,
+              foregroundColor: scheme.onSecondaryContainer,
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
           ),
           const SizedBox(width: 8),
+          if (selectedTag != null)
+            InputChip(
+              label: Text('#$selectedTag'),
+              onDeleted: () => onSelectTag(null),
+              deleteIcon: const Icon(Icons.close_rounded, size: 18),
+              backgroundColor: scheme.primaryContainer,
+              labelStyle: tt.bodyMedium?.copyWith(
+                color: scheme.onPrimaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              side: BorderSide.none,
+            ),
+          const Spacer(),
+          const SizedBox(width: 4),
+          if (mainMode == MainScreenMode.folders && onCollapseAll != null) ...[
+            CompactIconButton(
+              tooltip: 'Свернуть все',
+              icon: Icons.unfold_less_rounded,
+              onTap: onCollapseAll!,
+            ),
+            const SizedBox(width: 4),
+          ],
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CompactIconButton(
-                tooltip: 'Умная обработка',
-                icon: Icons.auto_awesome,
-                backgroundColor: scheme.secondaryContainer,
-                iconColor: scheme.onSecondaryContainer,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AiBatchScreen()),
+              if (mainMode != MainScreenMode.folders) ...[
+                SortMenuButton(
+                  sortMode: sortMode,
+                  sortAsc: sortAsc,
+                  scheme: scheme,
+                  onSelected: onChangeSortMode,
+                  onToggleDirection: onToggleSortDirection,
                 ),
-              ),
-              const SizedBox(width: 4),
-              SortMenuButton(
-                sortMode: sortMode,
-                sortAsc: sortAsc,
-                scheme: scheme,
-                onSelected: onChangeSortMode,
-                onToggleDirection: onToggleSortDirection,
-              ),
-              const SizedBox(width: 4),
-              CompactIconButton(
-                tooltip: isGrid
-                    ? '\u0421\u043f\u0438\u0441\u043e\u043a'
-                    : '\u0421\u0435\u0442\u043a\u0430',
-                icon: isGrid
-                    ? Icons.grid_view_rounded
-                    : Icons.view_agenda_rounded,
-                backgroundColor: scheme.primary,
-                iconColor: scheme.onPrimary,
-                onTap: onToggleView,
-              ),
-              const SizedBox(width: 4),
+                const SizedBox(width: 4),
+                CompactIconButton(
+                  tooltip: isGrid ? 'Список' : 'Сетка',
+                  icon: isGrid ? Icons.grid_view_rounded : Icons.view_agenda_rounded,
+                  backgroundColor: scheme.primary,
+                  iconColor: scheme.onPrimary,
+                  onTap: onToggleView,
+                ),
+                const SizedBox(width: 4),
+              ],
               FilledButton.icon(
                 onPressed: onToggleMainMode,
                 icon: Icon(

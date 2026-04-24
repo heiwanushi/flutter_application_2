@@ -101,6 +101,71 @@ final tagCountsProvider = Provider<Map<String, int>>((ref) {
   return counts;
 });
 
+class TagNode {
+  final String name;
+  final String fullPath;
+  final List<TagNode> children;
+  final int count;
+
+  TagNode({
+    required this.name,
+    required this.fullPath,
+    this.children = const [],
+    this.count = 0,
+  });
+}
+
+final tagTreeProvider = Provider<List<TagNode>>((ref) {
+  final allTags = ref.watch(allTagsProvider);
+  final tagCounts = ref.watch(tagCountsProvider);
+
+  final root = <String, dynamic>{};
+
+  for (final tag in allTags) {
+    final parts = tag.split('/');
+    var current = root;
+    var path = '';
+    for (var i = 0; i < parts.length; i++) {
+      final part = parts[i];
+      path = path.isEmpty ? part : '$path/$part';
+      if (!current.containsKey(part)) {
+        current[part] = <String, dynamic>{'__count': 0, '__path': path};
+      }
+      current = current[part] as Map<String, dynamic>;
+      if (i == parts.length - 1) {
+        current['__count'] = tagCounts[tag] ?? 0;
+      }
+    }
+  }
+
+  int calculateCumulativeCount(Map<String, dynamic> map) {
+    int count = map['__count'] as int? ?? 0;
+    final keys = map.keys.where((k) => k != '__count' && k != '__path').toList();
+    for (final key in keys) {
+      count += calculateCumulativeCount(map[key] as Map<String, dynamic>);
+    }
+    return count;
+  }
+
+  List<TagNode> buildNodes(Map<String, dynamic> map) {
+    final nodes = <TagNode>[];
+    final keys = map.keys.where((k) => k != '__count' && k != '__path').toList()..sort();
+    
+    for (final key in keys) {
+      final data = map[key] as Map<String, dynamic>;
+      nodes.add(TagNode(
+        name: key,
+        fullPath: data['__path'] as String,
+        count: calculateCumulativeCount(data),
+        children: buildNodes(data),
+      ));
+    }
+    return nodes;
+  }
+
+  return buildNodes(root);
+});
+
 class FilterParams {
   final List<Note> notes;
   final String query;

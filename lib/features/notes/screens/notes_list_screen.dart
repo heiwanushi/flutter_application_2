@@ -10,6 +10,7 @@ import '../widgets/list/notes_header.dart';
 import '../widgets/list/notes_list_placeholders.dart';
 import '../widgets/list/selection_header.dart';
 import '../widgets/list/folder_card.dart';
+import '../widgets/list/compact_note_card.dart';
 import 'note_editor_screen.dart';
 
 class NotesListScreen extends ConsumerStatefulWidget {
@@ -34,7 +35,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final sortMode = ref.watch(sortModeProvider);
     final sortAsc = ref.watch(sortAscProvider);
     final selectedTag = ref.watch(selectedTagProvider);
-    final allTags = ref.watch(allTagsProvider);
+    final tagTree = ref.watch(tagTreeProvider);
     final tagCounts = ref.watch(tagCountsProvider);
     final isGrid = viewMode == ViewMode.grid;
 
@@ -139,6 +140,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     ref.read(viewModeProvider.notifier).toggle(),
                 onSelectTag: (tag) =>
                     ref.read(selectedTagProvider.notifier).state = tag,
+                onCollapseAll: () => setState(() => _expandedFolders.clear()),
               ),
       ),
     );
@@ -160,7 +162,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                               ref.read(notesProvider.notifier).refreshSync(),
                           child: _buildFoldersView(
                             context,
-                            allTags: allTags,
+                            tagTree: tagTree,
                             tagCounts: tagCounts,
                             scheme: scheme,
                             allNotes: allNotesData,
@@ -331,7 +333,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
 
   Widget _buildFoldersView(
     BuildContext context, {
-    required List<String> allTags,
+    required List<TagNode> tagTree,
     required Map<String, int> tagCounts,
     required ColorScheme scheme,
     required List<Note> allNotes,
@@ -341,7 +343,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     required void Function(String id) toggleSelect,
     required void Function(Note note) openView,
   }) {
-    if (allTags.isEmpty) {
+    if (tagTree.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -365,61 +367,102 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       );
     }
 
-    Widget buildFolderCard(String tag) {
-      final count = tagCounts[tag] ?? 0;
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      children: _buildTagNodes(
+        context,
+        nodes: tagTree,
+        level: 0,
+        allNotes: allNotes,
+        isGrid: isGrid,
+        selectedIds: selectedIds,
+        isSelectionMode: isSelectionMode,
+        toggleSelect: toggleSelect,
+        openView: openView,
+        scheme: scheme,
+      ),
+    );
+  }
+
+  List<Widget> _buildTagNodes(
+    BuildContext context, {
+    required List<TagNode> nodes,
+    required int level,
+    required List<Note> allNotes,
+    required bool isGrid,
+    required Set<String> selectedIds,
+    required bool isSelectionMode,
+    required void Function(String id) toggleSelect,
+    required void Function(Note note) openView,
+    required ColorScheme scheme,
+  }) {
+    final widgets = <Widget>[];
+
+    for (final node in nodes) {
+      final tag = node.fullPath;
+      final isExpanded = _expandedFolders.contains(tag);
+      
+      // Заметки в этой конкретной папке
       final folderNotes = allNotes
           .where((n) => n.tags.contains(tag) && !n.isDeleted)
           .toList(growable: false);
-
       folderNotes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      
-      final isExpanded = _expandedFolders.contains(tag);
 
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          FolderExpansionCard(
-            tag: tag,
-            count: count,
-            scheme: scheme,
-            isExpanded: isExpanded,
-            onTap: () {
-              setState(() {
-                if (isExpanded) {
-                  _expandedFolders.remove(tag);
-                } else {
-                  _expandedFolders.add(tag);
-                }
-              });
-            },
-          ),
-          if (isExpanded)
-            Padding(
-              padding: EdgeInsets.only(bottom: isGrid ? 12 : 0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: _buildNoteSection(
-                  context: context,
-                  notes: folderNotes,
-                  isGrid: isGrid,
-                  selectedIds: selectedIds,
-                  isSelectionMode: isSelectionMode,
-                  toggleSelect: toggleSelect,
-                  openView: openView,
-                ),
-              ),
-            ),
-        ],
+      widgets.add(
+        FolderExpansionCard(
+          tag: node.name, // Отображаем только имя текущего уровня
+          fullPath: node.fullPath,
+          count: node.count,
+          scheme: scheme,
+          isExpanded: isExpanded,
+          level: level,
+          onTap: () {
+            setState(() {
+              if (isExpanded) {
+                _expandedFolders.remove(tag);
+              } else {
+                _expandedFolders.add(tag);
+              }
+            });
+          },
+        ),
       );
+
+      if (isExpanded) {
+        // Рендерим вложенные папки
+        if (node.children.isNotEmpty) {
+          widgets.addAll(_buildTagNodes(
+            context,
+            nodes: node.children,
+            level: level + 1,
+            allNotes: allNotes,
+            isGrid: isGrid,
+            selectedIds: selectedIds,
+            isSelectionMode: isSelectionMode,
+            toggleSelect: toggleSelect,
+            openView: openView,
+            scheme: scheme,
+          ));
+        }
+
+        // Рендерим заметки в этой папке
+        if (folderNotes.isNotEmpty) {
+          widgets.addAll(
+            folderNotes.map((note) => CompactNoteCard(
+              note: note,
+              scheme: scheme,
+              isSelected: selectedIds.contains(note.id),
+              isSelectionMode: isSelectionMode,
+              onTap: isSelectionMode ? () => toggleSelect(note.id) : () => openView(note),
+              onLongPress: () => toggleSelect(note.id),
+            )),
+          );
+        }
+      }
     }
 
-    return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: allTags.length,
-      itemBuilder: (context, index) => buildFolderCard(allTags[index]),
-    );
+    return widgets;
   }
 }
 
