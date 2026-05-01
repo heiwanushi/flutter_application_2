@@ -240,7 +240,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     final notifier = ref.read(noteEditorProvider(widget.note).notifier);
     final picker = ImagePicker();
     final dir = await getApplicationDocumentsDirectory();
-    final picked = await picker.pickMultiImage(imageQuality: 80);
+    final picked = await picker.pickMultiImage(imageQuality: 80, maxWidth: 2048, maxHeight: 2048);
     if (picked.isEmpty) return;
 
     final newPaths = List<String>.from(state.imagePaths);
@@ -248,6 +248,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       final fileName = '${DateTime.now().microsecondsSinceEpoch}_${newPaths.length}${p.extension(image.path)}';
       final dest = File(p.join(dir.path, fileName));
       await File(image.path).copy(dest.path);
+      // Удаляем оригинал после копирования
+      try {
+        await File(image.path).delete();
+      } catch (_) {}
       newPaths.add(dest.path);
     }
     notifier.setImages(newPaths);
@@ -322,9 +326,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         await _save();
         if (context.mounted) {
           ref.read(noteEditorProvider(widget.note).notifier).setCanPop(true);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) Navigator.of(context).pop();
-          });
+          Navigator.of(context).pop();
         }
       },
       child: Scaffold(
