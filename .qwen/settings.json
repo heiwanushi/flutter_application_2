@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(pmc.ncbi.nlm.nih.gov)",
+      "WebFetch(reference-global.com)",
+      "WebFetch(gitnux.org)",
+      "WebFetch(www.jenova.ai)",
+      "WebFetch(www.researchgate.net)",
+      "WebFetch(klu.so)"
+    ]
+  },
+  "$version": 3
+}

@@ -1,0 +1,14 @@
+﻿Analyzing flutter_application_2...                              
+
+   info - Unnecessary use of multiple underscores - lib\features\notes\screens\archive_screen.dart:61:35 - unnecessary_underscores
+  error - The name 'Note' is defined in the libraries 'package:flutter_application_2/data/models/note.dart' and 'package:flutter_contacts/models/properties/note.dart (via package:flutter_contacts/flutter_contacts.dart)' - lib\features\notes\screens\note_editor_screen.dart:55:9 - ambiguous_import
+warning - The value of the field '_contacts' isn't used - lib\features\notes\screens\note_editor_screen.dart:70:21 - unused_field
+  error - The name 'Note' is defined in the libraries 'package:flutter_application_2/data/models/note.dart' and 'package:flutter_contacts/models/properties/note.dart (via package:flutter_contacts/flutter_contacts.dart)' - lib\features\notes\screens\note_editor_screen.dart:239:5 - ambiguous_import
+  error - The name 'Note' is defined in the libraries 'package:flutter_application_2/data/models/note.dart' and 'package:flutter_contacts/models/properties/note.dart (via package:flutter_contacts/flutter_contacts.dart)' - lib\features\notes\screens\note_editor_screen.dart:307:30 - ambiguous_import
+  error - 1 positional argument expected by 'request', but 0 found - lib\features\notes\screens\note_editor_screen.dart:594:71 - not_enough_positional_arguments
+  error - The name 'PermissionStatus' is defined in the libraries 'package:flutter_contacts/models/permissions/permission_status.dart (via package:flutter_contacts/flutter_contacts.dart)' and 'package:permission_handler_platform_interface/permission_handler_platform_interface.dart (via package:permission_handler/permission_handler.dart)' - lib\features\notes\screens\note_editor_screen.dart:595:28 - ambiguous_import
+  error - The name 'PermissionStatus' is defined in the libraries 'package:flutter_contacts/models/permissions/permission_status.dart (via package:flutter_contacts/flutter_contacts.dart)' and 'package:permission_handler_platform_interface/permission_handler_platform_interface.dart (via package:permission_handler/permission_handler.dart)' - lib\features\notes\screens\note_editor_screen.dart:595:73 - ambiguous_import
+warning - The '!' will have no effect because the receiver can't be null - lib\features\notes\screens\note_editor_screen.dart:598:62 - unnecessary_non_null_assertion
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\notes\widgets\editor\editor_event_section.dart:117:15 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\notes\widgets\editor\editor_event_section.dart:150:15 - deprecated_member_use
+
