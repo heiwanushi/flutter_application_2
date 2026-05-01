@@ -299,12 +299,12 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
 
     for (final n in currentNotes) {
       if (ids.contains(n.id)) {
-        try {
-          await ref.read(calendarServiceProvider).deleteNoteEvent(n);
-        } catch (_) {}
+        // Запускаем удаление из календаря в фоне без блокировки
+        ref.read(calendarServiceProvider).deleteNoteEvent(n).catchError((_) {});
+        
         final updated = n.copyWith(isDeleted: true, isNoteSynced: false);
         updatedNotesList.add(updated);
-        await _remoteRepo?.upsertNote(updated);
+        _remoteRepo?.upsertNote(updated).catchError((_) {});
       } else {
         updatedNotesList.add(n);
       }
