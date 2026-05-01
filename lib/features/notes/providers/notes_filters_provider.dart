@@ -75,6 +75,7 @@ class SortAscNotifier extends Notifier<bool> {
 
 final searchQueryProvider = StateProvider((_) => '');
 final selectedTagProvider = StateProvider<String?>((_) => null);
+final currentFolderProvider = StateProvider<String?>((_) => null);
 
 final allTagsProvider = Provider<List<String>>((ref) {
   final notes = ref.watch(notesProvider).value ?? <Note>[];

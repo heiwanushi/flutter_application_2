@@ -1,6 +1,99 @@
 import 'package:flutter/material.dart';
 import '../../../../core/utils/note_colors.dart';
 
+class FolderCard extends StatelessWidget {
+  final String tag;
+  final String fullPath;
+  final int count;
+  final ColorScheme scheme;
+  final VoidCallback onTap;
+
+  const FolderCard({
+    super.key,
+    required this.tag,
+    required this.fullPath,
+    required this.count,
+    required this.scheme,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorIdx = NoteColors.fromCategoryName(tag);
+    final brightness = Theme.of(context).brightness;
+    final baseColor = colorIdx != null 
+        ? NoteColors.bg(colorIdx, brightness).withValues(alpha: 0.7)
+        : scheme.surfaceContainerLow;
+    
+    final onBaseColor = colorIdx != null
+        ? (brightness == Brightness.dark ? Colors.white : Colors.black87)
+        : scheme.onSurface;
+
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: baseColor,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: colorIdx != null ? Colors.transparent : scheme.outlineVariant,
+          width: 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.folder_rounded,
+                size: 24,
+                color: colorIdx != null ? onBaseColor : scheme.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  tag,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: onBaseColor,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (count > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colorIdx != null ? scheme.surface.withValues(alpha: 0.3) : scheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: colorIdx != null ? onBaseColor : scheme.onSecondaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 24,
+                color: colorIdx != null ? onBaseColor : scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class FolderExpansionCard extends StatelessWidget {
   final String tag;
   final String fullPath;
