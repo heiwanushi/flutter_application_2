@@ -24,6 +24,15 @@ class TrashScreen extends ConsumerWidget {
         scrolledUnderElevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.restore_from_trash_rounded),
+            tooltip: 'Восстановить все',
+            onPressed: () {
+              final trashNotes = ref.read(trashNotesProvider).value ?? [];
+              if (trashNotes.isEmpty) return;
+              ref.read(notesProvider.notifier).restoreAll();
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.delete_sweep_rounded),
             tooltip: 'Очистить корзину',
             onPressed: () {

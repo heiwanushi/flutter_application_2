@@ -393,6 +393,34 @@ class NotesNotifier extends AsyncNotifier<List<Note>> {
     }
   }
 
+  Future<void> restoreAll() async {
+    final currentNotes = state.value ?? <Note>[];
+    final notesToRestore = currentNotes.where((n) => n.isDeleted).toList();
+    if (notesToRestore.isEmpty) return;
+
+    final updatedNotes = <Note>[];
+    for (final note in notesToRestore) {
+      updatedNotes.add(note.copyWith(isDeleted: false, isNoteSynced: false));
+    }
+
+    final notes = <Note>[
+      for (final n in currentNotes)
+        if (n.isDeleted)
+          updatedNotes.firstWhere((un) => un.id == n.id)
+        else
+          n,
+    ];
+
+    // Обновляем состояние локально
+    state = AsyncValue.data(notes);
+
+    // Сохраняем изменения и восстанавливаем уведомления
+    for (final updatedNote in updatedNotes) {
+      await _persist(notes, noteToSync: updatedNote);
+      await ref.read(notificationServiceProvider).scheduleNoteNotification(updatedNote);
+    }
+  }
+
   Future<void> emptyTrash() async {
     final currentNotes = state.value ?? <Note>[];
     final idsToDelete = currentNotes
