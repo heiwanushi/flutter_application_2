@@ -22,6 +22,31 @@ class NotesListScreen extends ConsumerStatefulWidget {
 
 class _NotesListScreenState extends ConsumerState<NotesListScreen> {
   final Set<String> _expandedFolders = {};
+  
+  List<String> get _currentPath {
+    final currentFolder = ref.read(currentFolderProvider);
+    if (currentFolder == null) return [];
+    return currentFolder.split('/');
+  }
+  
+  void _navigateToFolder(String? folderPath) {
+    setState(() {
+      ref.read(currentFolderProvider.notifier).state = folderPath;
+      // При переходе в папку сворачиваем все остальные
+      if (folderPath != null) {
+        _expandedFolders.clear();
+        // Разворачиваем все родительские папки для текущего пути
+        final parts = folderPath.split('/');
+        for (int i = 0; i < parts.length; i++) {
+          final path = parts.sublist(0, i + 1).join('/');
+          _expandedFolders.add(path);
+        }
+      } else {
+        // Возврат в корень - сворачиваем всё
+        _expandedFolders.clear();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +176,9 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         child: Column(
           children: [
             topAreaChild,
+            // Лента навигации по папкам
+            if (mainMode == MainScreenMode.folders && _currentPath.isNotEmpty)
+              _buildBreadcrumbs(scheme, tt),
             Expanded(
               child: mainMode == MainScreenMode.folders
                   ? allNotesAsync.when(
@@ -343,7 +371,33 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     required void Function(String id) toggleSelect,
     required void Function(Note note) openView,
   }) {
-    if (tagTree.isEmpty) {
+    final currentFolder = ref.watch(currentFolderProvider);
+    
+    // Получаем только корневые узлы или узлы текущей папки
+    List<TagNode> nodesToShow;
+    if (currentFolder == null) {
+      // Показываем корневые папки
+      nodesToShow = tagTree;
+    } else {
+      // Находим текущую папку в дереве
+      final currentNode = _findNode(tagTree, currentFolder);
+      if (currentNode != null && currentNode.children.isNotEmpty) {
+        // Показываем вложенные папки
+        nodesToShow = currentNode.children;
+      } else {
+        nodesToShow = [];
+      }
+    }
+    
+    // Заметки в текущей папке
+    final currentNotes = currentFolder == null
+        ? <Note>[] // В корне показываем только папки
+        : allNotes
+            .where((n) => n.tags.contains(currentFolder) && !n.isDeleted)
+            .toList(growable: false);
+    currentNotes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    
+    if (nodesToShow.isEmpty && currentNotes.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -355,7 +409,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 Icon(Icons.folder_off_rounded, size: 64, color: scheme.surfaceContainerHighest),
                 const SizedBox(height: 16),
                 Text(
-                  'Нет папок',
+                  currentFolder == null ? 'Нет папок' : 'Папка пуста',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -370,99 +424,114 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      children: _buildTagNodes(
-        context,
-        nodes: tagTree,
-        level: 0,
-        allNotes: allNotes,
-        isGrid: isGrid,
-        selectedIds: selectedIds,
-        isSelectionMode: isSelectionMode,
-        toggleSelect: toggleSelect,
-        openView: openView,
-        scheme: scheme,
-      ),
-    );
-  }
-
-  List<Widget> _buildTagNodes(
-    BuildContext context, {
-    required List<TagNode> nodes,
-    required int level,
-    required List<Note> allNotes,
-    required bool isGrid,
-    required Set<String> selectedIds,
-    required bool isSelectionMode,
-    required void Function(String id) toggleSelect,
-    required void Function(Note note) openView,
-    required ColorScheme scheme,
-  }) {
-    final widgets = <Widget>[];
-
-    for (final node in nodes) {
-      final tag = node.fullPath;
-      final isExpanded = _expandedFolders.contains(tag);
-      
-      // Заметки в этой конкретной папке
-      final folderNotes = allNotes
-          .where((n) => n.tags.contains(tag) && !n.isDeleted)
-          .toList(growable: false);
-      folderNotes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-
-      widgets.add(
-        FolderExpansionCard(
-          tag: node.name, // Отображаем только имя текущего уровня
-          fullPath: node.fullPath,
-          count: node.count,
-          scheme: scheme,
-          isExpanded: isExpanded,
-          level: level,
-          onTap: () {
-            setState(() {
-              if (isExpanded) {
-                _expandedFolders.remove(tag);
-              } else {
-                _expandedFolders.add(tag);
-              }
-            });
-          },
-        ),
-      );
-
-      if (isExpanded) {
-        // Рендерим вложенные папки
-        if (node.children.isNotEmpty) {
-          widgets.addAll(_buildTagNodes(
-            context,
-            nodes: node.children,
-            level: level + 1,
-            allNotes: allNotes,
-            isGrid: isGrid,
-            selectedIds: selectedIds,
-            isSelectionMode: isSelectionMode,
-            toggleSelect: toggleSelect,
-            openView: openView,
-            scheme: scheme,
-          ));
-        }
-
-        // Рендерим заметки в этой папке
-        if (folderNotes.isNotEmpty) {
-          widgets.addAll(
-            folderNotes.map((note) => CompactNoteCard(
+      children: [
+        // Показываем вложенные папки
+        ...nodesToShow.map((node) {
+          final tag = node.fullPath;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: FolderCard(
+              tag: node.name,
+              fullPath: node.fullPath,
+              count: node.count,
+              scheme: scheme,
+              onTap: () => _navigateToFolder(node.fullPath),
+            ),
+          );
+        }),
+        // Показываем заметки в текущей папке
+        if (currentNotes.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          ...currentNotes.map((note) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: CompactNoteCard(
               note: note,
               scheme: scheme,
               isSelected: selectedIds.contains(note.id),
               isSelectionMode: isSelectionMode,
               onTap: isSelectionMode ? () => toggleSelect(note.id) : () => openView(note),
               onLongPress: () => toggleSelect(note.id),
-            )),
-          );
-        }
+            ),
+          )),
+        ],
+      ],
+    );
+  }
+
+  TagNode? _findNode(List<TagNode> nodes, String fullPath) {
+    for (final node in nodes) {
+      if (node.fullPath == fullPath) {
+        return node;
+      }
+      final found = _findNode(node.children, fullPath);
+      if (found != null) {
+        return found;
       }
     }
+    return null;
+  }
 
-    return widgets;
+  Widget _buildBreadcrumbs(ColorScheme scheme, TextTheme tt) {
+    final path = _currentPath;
+    
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        border: Border(
+          bottom: BorderSide(color: scheme.outlineVariant, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Кнопка "назад" или "в корень"
+          IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, size: 20),
+            onPressed: () => _navigateToFolder(null),
+            tooltip: 'В корень',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          const SizedBox(width: 8),
+          // Лента папок
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: path.length,
+              separatorBuilder: (_, __) => Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              itemBuilder: (context, index) {
+                final isLast = index == path.length - 1;
+                final folderPath = path.sublist(0, index + 1).join('/');
+                final folderName = path[index];
+                
+                return GestureDetector(
+                  onTap: isLast ? null : () => _navigateToFolder(folderPath),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        folderName,
+                        style: tt.bodyMedium?.copyWith(
+                          color: isLast 
+                              ? scheme.primary 
+                              : scheme.onSurfaceVariant,
+                          fontWeight: isLast ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
