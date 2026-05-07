@@ -6,15 +6,19 @@ import '../../../../data/models/note.dart';
 class EditorAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final Note? note;
   final VoidCallback onBack;
-  final VoidCallback onShowSettings;
+  final VoidCallback onShowColorPicker;
   final VoidCallback onDelete;
+  final VoidCallback onShowAI;
+  final VoidCallback onTogglePreview;
 
   const EditorAppBar({
     super.key,
     required this.note,
     required this.onBack,
-    required this.onShowSettings,
+    required this.onShowColorPicker,
     required this.onDelete,
+    required this.onShowAI,
+    required this.onTogglePreview,
   });
 
   @override
@@ -54,8 +58,8 @@ class EditorAppBar extends ConsumerWidget implements PreferredSizeWidget {
         ),
         const SizedBox(width: 8),
         _EditorIconButton(
-          icon: Icons.tune_rounded,
-          onTap: onShowSettings,
+          icon: Icons.palette_outlined,
+          onTap: onShowColorPicker,
         ),
         const SizedBox(width: 8),
         if (note != null)
@@ -67,6 +71,16 @@ class EditorAppBar extends ConsumerWidget implements PreferredSizeWidget {
           ),
         if (note != null) const SizedBox(width: 8),
         _EditorIconButton(
+          icon: state.isPreviewMode ? Icons.edit_note_rounded : Icons.visibility_outlined,
+          onTap: onTogglePreview,
+        ),
+        const SizedBox(width: 8),
+        _EditorIconButton(
+          icon: Icons.auto_awesome_rounded,
+          onTap: onShowAI,
+        ),
+        const SizedBox(width: 8),
+        _EditorIconButton(
           icon: state.isPinned
               ? Icons.push_pin_rounded
               : Icons.push_pin_outlined,
@@ -75,19 +89,6 @@ class EditorAppBar extends ConsumerWidget implements PreferredSizeWidget {
               ? scheme.primaryContainer
               : scheme.surfaceContainerHighest,
           foregroundColor: state.isPinned
-              ? scheme.onPrimaryContainer
-              : scheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: 8),
-        _EditorIconButton(
-          icon: state.isCompleted
-              ? Icons.check_circle_rounded
-              : Icons.radio_button_unchecked_rounded,
-          onTap: notifier.toggleCompleted,
-          color: state.isCompleted
-              ? scheme.primaryContainer
-              : scheme.surfaceContainerHighest,
-          foregroundColor: state.isCompleted
               ? scheme.onPrimaryContainer
               : scheme.onSurfaceVariant,
         ),

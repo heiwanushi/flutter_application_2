@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/utils/note_colors.dart';
 import '../../../data/models/note.dart';
 import 'notes_provider.dart';
 
@@ -21,6 +22,8 @@ class NoteEditorState {
   final bool isPreviewMode;
   final bool isSaving;
   final bool canPop;
+  final String? calendarId;
+  final String? calendarEventId;
 
   NoteEditorState({
     this.title = '',
@@ -39,6 +42,8 @@ class NoteEditorState {
     this.isPreviewMode = false,
     this.isSaving = false,
     this.canPop = false,
+    this.calendarId,
+    this.calendarEventId,
   });
 
   NoteEditorState copyWith({
@@ -56,8 +61,10 @@ class NoteEditorState {
     String? originalContent,
     bool? isAIProcessing,
     bool? isPreviewMode,
-    bool? isSaving,
+     bool? isSaving,
     bool? canPop,
+    String? calendarId,
+    String? calendarEventId,
     bool clearColor = false,
     bool clearEvent = false,
   }) {
@@ -78,6 +85,8 @@ class NoteEditorState {
       isPreviewMode: isPreviewMode ?? this.isPreviewMode,
       isSaving: isSaving ?? this.isSaving,
       canPop: canPop ?? this.canPop,
+      calendarId: calendarId ?? this.calendarId,
+      calendarEventId: calendarEventId ?? this.calendarEventId,
     );
   }
 
@@ -133,6 +142,8 @@ class NoteEditorNotifier extends StateNotifier<NoteEditorState> {
         isCompleted: _initialNote.isCompleted,
         originalContent: _initialNote.originalContent,
         isPreviewMode: true,
+        calendarId: _initialNote.calendarId,
+        calendarEventId: _initialNote.calendarEventId,
       );
     }
     _recordHistory();
@@ -174,7 +185,29 @@ class NoteEditorNotifier extends StateNotifier<NoteEditorState> {
   }
 
   void updateColor(int? index) {
-    state = state.copyWith(colorIndex: index, clearColor: index == null);
+    final allCategoryNames = NoteColors.categoryNames.values.toSet();
+    final newCategory = index != null ? NoteColors.categoryNames[index] : null;
+
+    bool replaced = false;
+    final updatedTags = state.tags.map((tag) {
+      final parts = tag.split('/');
+      if (allCategoryNames.contains(parts.first)) {
+        replaced = true;
+        if (newCategory == null) return null;
+        return [newCategory, ...parts.sublist(1)].join('/');
+      }
+      return tag;
+    }).whereType<String>().toSet().toList();
+
+    if (!replaced && newCategory != null) {
+      updatedTags.add(newCategory);
+    }
+
+    state = state.copyWith(
+      colorIndex: index,
+      clearColor: index == null,
+      tags: updatedTags,
+    );
     _recordHistory();
   }
 
@@ -247,8 +280,8 @@ class NoteEditorNotifier extends StateNotifier<NoteEditorState> {
     state = state.copyWith(canPop: canPop);
   }
 
-  Future<void> updateCalendarEventMeta(String id, {required String calendarId, required String calendarEventId}) async {
-    // This is handled by NotesNotifier, but we can have a proxy if needed.
+  void updateCalendarMeta(String? calendarId, String? eventId) {
+    state = state.copyWith(calendarId: calendarId, calendarEventId: eventId);
   }
 
   // History management
@@ -319,8 +352,8 @@ class NoteEditorNotifier extends StateNotifier<NoteEditorState> {
           imagePaths: state.imagePaths,
           eventAt: state.eventAt,
           reminderMinutes: state.eventAt == null ? null : state.reminderMinutes,
-          calendarEventId: _initialNote.calendarEventId,
-          calendarId: _initialNote.calendarId,
+          calendarEventId: state.calendarEventId,
+          calendarId: state.calendarId,
           repeatMode: state.repeatMode,
           clearEvent: state.eventAt == null,
           originalContent: state.originalContent,

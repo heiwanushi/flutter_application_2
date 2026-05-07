@@ -9,8 +9,7 @@ import '../widgets/note_card.dart';
 import '../widgets/list/notes_header.dart';
 import '../widgets/list/notes_list_placeholders.dart';
 import '../widgets/list/selection_header.dart';
-import '../widgets/list/folder_card.dart';
-import '../widgets/list/compact_note_card.dart';
+import '../widgets/list/tag_ribbon.dart';
 import 'note_editor_screen.dart';
 
 class NotesListScreen extends ConsumerStatefulWidget {
@@ -21,8 +20,6 @@ class NotesListScreen extends ConsumerStatefulWidget {
 }
 
 class _NotesListScreenState extends ConsumerState<NotesListScreen> {
-  final Set<String> _expandedFolders = {};
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -35,8 +32,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final sortMode = ref.watch(sortModeProvider);
     final sortAsc = ref.watch(sortAscProvider);
     final selectedTag = ref.watch(selectedTagProvider);
-    final tagTree = ref.watch(tagTreeProvider);
-    final tagCounts = ref.watch(tagCountsProvider);
     final isGrid = viewMode == ViewMode.grid;
 
     final selectedIds = ref.watch(selectedIdsProvider);
@@ -126,7 +121,6 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 sortAsc: sortAsc,
                 mainMode: mainMode,
                 isGrid: isGrid,
-                selectedTag: selectedTag,
                 totalNotes: totalNotes,
                 scheme: scheme,
                 tt: tt,
@@ -134,13 +128,8 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                     ref.read(sortModeProvider.notifier).setMode(value),
                 onToggleSortDirection: () =>
                     ref.read(sortAscProvider.notifier).toggle(),
-                onToggleMainMode: () =>
-                    ref.read(mainScreenModeProvider.notifier).toggle(),
                 onToggleView: () =>
                     ref.read(viewModeProvider.notifier).toggle(),
-                onSelectTag: (tag) =>
-                    ref.read(selectedTagProvider.notifier).state = tag,
-                onCollapseAll: () => setState(() => _expandedFolders.clear()),
               ),
       ),
     );
@@ -151,31 +140,10 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
         child: Column(
           children: [
             topAreaChild,
+            if (mainMode == MainScreenMode.feed && !isSelectionMode)
+              const TagRibbon(),
             Expanded(
-              child: mainMode == MainScreenMode.folders
-                  ? allNotesAsync.when(
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (e, _) => Center(child: Text('Ошибка: $e')),
-                      data: (allNotesData) {
-                        return RefreshIndicator(
-                          onRefresh: () =>
-                              ref.read(notesProvider.notifier).refreshSync(),
-                          child: _buildFoldersView(
-                            context,
-                            tagTree: tagTree,
-                            tagCounts: tagCounts,
-                            scheme: scheme,
-                            allNotes: allNotesData,
-                            isGrid: isGrid,
-                            selectedIds: selectedIds,
-                            isSelectionMode: isSelectionMode,
-                            toggleSelect: toggleSelect,
-                            openView: openView,
-                          ),
-                        );
-                      },
-                    )
-                  : notesAsync.when(
+              child: notesAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('Ошибка: $e')),
                 data: (notes) {
@@ -250,6 +218,13 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 },
               ),
             ),
+            if (selectedTag != null && !isSelectionMode && mainMode == MainScreenMode.feed)
+              _BottomPathBar(
+                selectedTag: selectedTag,
+                scheme: scheme,
+                tt: tt,
+                onReset: () => ref.read(selectedTagProvider.notifier).state = null,
+              ),
           ],
         ),
       ),
@@ -331,138 +306,94 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     );
   }
 
-  Widget _buildFoldersView(
-    BuildContext context, {
-    required List<TagNode> tagTree,
-    required Map<String, int> tagCounts,
-    required ColorScheme scheme,
-    required List<Note> allNotes,
-    required bool isGrid,
-    required Set<String> selectedIds,
-    required bool isSelectionMode,
-    required void Function(String id) toggleSelect,
-    required void Function(Note note) openView,
-  }) {
-    if (tagTree.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.6,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.folder_off_rounded, size: 64, color: scheme.surfaceContainerHighest),
-                const SizedBox(height: 16),
-                Text(
-                  'Нет папок',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          )
-        ],
-      );
-    }
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
+}
+
+class _BottomPathBar extends ConsumerWidget {
+  final String selectedTag;
+  final ColorScheme scheme;
+  final TextTheme tt;
+  final VoidCallback onReset;
+
+  const _BottomPathBar({
+    required this.selectedTag,
+    required this.scheme,
+    required this.tt,
+    required this.onReset,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final parts = selectedTag.split('/');
+    
+    return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      children: _buildTagNodes(
-        context,
-        nodes: tagTree,
-        level: 0,
-        allNotes: allNotes,
-        isGrid: isGrid,
-        selectedIds: selectedIds,
-        isSelectionMode: isSelectionMode,
-        toggleSelect: toggleSelect,
-        openView: openView,
-        scheme: scheme,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.folder_open_rounded, size: 16, color: scheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                children: [
+                  for (var i = 0; i < parts.length; i++) ...[
+                    if (i > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(Icons.chevron_right_rounded, 
+                          size: 14, color: scheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                      ),
+                    InkWell(
+                      onTap: () {
+                        final newPath = parts.sublist(0, i + 1).join('/');
+                        ref.read(selectedTagProvider.notifier).state = newPath;
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 120),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Text(
+                          parts[i],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.labelMedium?.copyWith(
+                            color: i == parts.length - 1 
+                                ? scheme.primary 
+                                : scheme.onSurfaceVariant,
+                            fontWeight: i == parts.length - 1 
+                                ? FontWeight.bold 
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: onReset,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            style: IconButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(24, 24),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
       ),
     );
-  }
-
-  List<Widget> _buildTagNodes(
-    BuildContext context, {
-    required List<TagNode> nodes,
-    required int level,
-    required List<Note> allNotes,
-    required bool isGrid,
-    required Set<String> selectedIds,
-    required bool isSelectionMode,
-    required void Function(String id) toggleSelect,
-    required void Function(Note note) openView,
-    required ColorScheme scheme,
-  }) {
-    final widgets = <Widget>[];
-
-    for (final node in nodes) {
-      final tag = node.fullPath;
-      final isExpanded = _expandedFolders.contains(tag);
-      
-      // Заметки в этой конкретной папке
-      final folderNotes = allNotes
-          .where((n) => n.tags.contains(tag) && !n.isDeleted)
-          .toList(growable: false);
-      folderNotes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-
-      widgets.add(
-        FolderExpansionCard(
-          tag: node.name, // Отображаем только имя текущего уровня
-          fullPath: node.fullPath,
-          count: node.count,
-          scheme: scheme,
-          isExpanded: isExpanded,
-          level: level,
-          onTap: () {
-            setState(() {
-              if (isExpanded) {
-                _expandedFolders.remove(tag);
-              } else {
-                _expandedFolders.add(tag);
-              }
-            });
-          },
-        ),
-      );
-
-      if (isExpanded) {
-        // Рендерим вложенные папки
-        if (node.children.isNotEmpty) {
-          widgets.addAll(_buildTagNodes(
-            context,
-            nodes: node.children,
-            level: level + 1,
-            allNotes: allNotes,
-            isGrid: isGrid,
-            selectedIds: selectedIds,
-            isSelectionMode: isSelectionMode,
-            toggleSelect: toggleSelect,
-            openView: openView,
-            scheme: scheme,
-          ));
-        }
-
-        // Рендерим заметки в этой папке
-        if (folderNotes.isNotEmpty) {
-          widgets.addAll(
-            folderNotes.map((note) => CompactNoteCard(
-              note: note,
-              scheme: scheme,
-              isSelected: selectedIds.contains(note.id),
-              isSelectionMode: isSelectionMode,
-              onTap: isSelectionMode ? () => toggleSelect(note.id) : () => openView(note),
-              onLongPress: () => toggleSelect(note.id),
-            )),
-          );
-        }
-      }
-    }
-
-    return widgets;
   }
 }
 

@@ -52,11 +52,14 @@ class CalendarService {
 
     final event = Event(
       calendar.id,
-      eventId: note.calendarEventId,
+      eventId: (note.calendarEventId?.isEmpty ?? true) ? null : note.calendarEventId,
       title: note.title.trim().isNotEmpty ? note.title.trim() : 'Заметка',
       description: _buildDescription(note),
       start: start,
       end: end,
+      allDay: false,
+      status: EventStatus.Confirmed,
+      availability: Availability.Busy,
       reminders: [Reminder(minutes: note.reminderMinutes ?? 10)],
       url: buildNoteDeepLink(note.id),
     );

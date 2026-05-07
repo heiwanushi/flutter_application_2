@@ -7,16 +7,12 @@ class NotesHeader extends StatelessWidget {
   final bool sortAsc;
   final MainScreenMode mainMode;
   final bool isGrid;
-  final String? selectedTag;
   final int totalNotes;
   final ColorScheme scheme;
   final TextTheme tt;
   final ValueChanged<SortMode> onChangeSortMode;
   final VoidCallback onToggleSortDirection;
   final VoidCallback onToggleView;
-  final VoidCallback onToggleMainMode;
-  final ValueChanged<String?> onSelectTag;
-  final VoidCallback? onCollapseAll;
 
   const NotesHeader({
     super.key,
@@ -24,16 +20,12 @@ class NotesHeader extends StatelessWidget {
     required this.sortAsc,
     required this.mainMode,
     required this.isGrid,
-    required this.selectedTag,
     required this.totalNotes,
     required this.scheme,
     required this.tt,
     required this.onChangeSortMode,
     required this.onToggleSortDirection,
     required this.onToggleView,
-    required this.onToggleMainMode,
-    required this.onSelectTag,
-    this.onCollapseAll,
   });
 
   @override
@@ -58,83 +50,26 @@ class NotesHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          if (selectedTag != null)
-            InputChip(
-              label: Text('#$selectedTag'),
-              onDeleted: () => onSelectTag(null),
-              deleteIcon: const Icon(Icons.close_rounded, size: 18),
-              backgroundColor: scheme.primaryContainer,
-              labelStyle: tt.bodyMedium?.copyWith(
-                color: scheme.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              side: BorderSide.none,
-            ),
+
           const Spacer(),
-          const SizedBox(width: 4),
-          if (mainMode == MainScreenMode.folders && onCollapseAll != null) ...[
-            CompactIconButton(
-              tooltip: 'Свернуть все',
-              icon: Icons.unfold_less_rounded,
-              onTap: onCollapseAll!,
-            ),
-            const SizedBox(width: 4),
-          ],
+
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (mainMode != MainScreenMode.folders) ...[
-                SortMenuButton(
-                  sortMode: sortMode,
-                  sortAsc: sortAsc,
-                  scheme: scheme,
-                  onSelected: onChangeSortMode,
-                  onToggleDirection: onToggleSortDirection,
-                ),
-                const SizedBox(width: 4),
-                CompactIconButton(
-                  tooltip: isGrid ? 'Список' : 'Сетка',
-                  icon: isGrid ? Icons.grid_view_rounded : Icons.view_agenda_rounded,
-                  backgroundColor: scheme.primary,
-                  iconColor: scheme.onPrimary,
-                  onTap: onToggleView,
-                ),
-                const SizedBox(width: 4),
-              ],
-              FilledButton.icon(
-                onPressed: onToggleMainMode,
-                icon: Icon(
-                  mainMode == MainScreenMode.folders
-                      ? Icons.folder_copy_rounded
-                      : Icons.dynamic_feed_rounded,
-                  size: 20,
-                  color: scheme.primary,
-                ),
-                label: Text(
-                  mainMode == MainScreenMode.folders ? 'Папки' : 'Лента',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700, 
-                    fontSize: 14,
-                    color: scheme.primary,
-                  ),
-                ),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  backgroundColor: scheme.primaryContainer.withValues(alpha: 0.5),
-                  foregroundColor: scheme.onPrimaryContainer,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  side: BorderSide(
-                    color: scheme.primary.withValues(alpha: 0.3),
-                    width: 1.5,
-                  ),
-                ),
+              SortMenuButton(
+                sortMode: sortMode,
+                sortAsc: sortAsc,
+                scheme: scheme,
+                onSelected: onChangeSortMode,
+                onToggleDirection: onToggleSortDirection,
+              ),
+              const SizedBox(width: 4),
+              CompactIconButton(
+                tooltip: isGrid ? 'Список' : 'Сетка',
+                icon: isGrid ? Icons.grid_view_rounded : Icons.view_agenda_rounded,
+                backgroundColor: scheme.primary,
+                iconColor: scheme.onPrimary,
+                onTap: onToggleView,
               ),
             ],
           ),

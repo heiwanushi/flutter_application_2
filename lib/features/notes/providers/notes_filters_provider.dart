@@ -9,7 +9,7 @@ import 'notes_provider.dart';
 
 enum ViewMode { grid, list }
 
-enum MainScreenMode { feed, folders }
+enum MainScreenMode { feed }
 
 enum SortMode { updatedAt, createdAt, title }
 
@@ -20,10 +20,6 @@ final mainScreenModeProvider = NotifierProvider<MainScreenModeNotifier, MainScre
 class MainScreenModeNotifier extends Notifier<MainScreenMode> {
   @override
   MainScreenMode build() => MainScreenMode.feed;
-  void toggle() {
-    state = state == MainScreenMode.feed ? MainScreenMode.folders : MainScreenMode.feed;
-    ref.read(settingsServiceProvider).saveMainMode(state.index);
-  }
 
   void setInitial(MainScreenMode mode) => state = mode;
 }
@@ -80,6 +76,7 @@ final allTagsProvider = Provider<List<String>>((ref) {
   final notes = ref.watch(notesProvider).value ?? <Note>[];
   final tags = <String>{};
   for (final n in notes) {
+    if (n.isDeleted) continue;
     for (final tag in n.tags) {
       if (tag != 'AI') tags.add(tag);
     }
@@ -92,6 +89,7 @@ final tagCountsProvider = Provider<Map<String, int>>((ref) {
   final counts = <String, int>{};
 
   for (final note in notes) {
+    if (note.isDeleted) continue;
     for (final tag in note.tags) {
       if (tag == 'AI') continue;
       counts[tag] = (counts[tag] ?? 0) + 1;
@@ -166,6 +164,15 @@ final tagTreeProvider = Provider<List<TagNode>>((ref) {
   return buildNodes(root);
 });
 
+TagNode? findTagNode(List<TagNode> tree, String path) {
+  for (final node in tree) {
+    if (node.fullPath == path) return node;
+    final found = findTagNode(node.children, path);
+    if (found != null) return found;
+  }
+  return null;
+}
+
 class FilterParams {
   final List<Note> notes;
   final String query;
@@ -189,7 +196,8 @@ List<Note> _filterNotesTask(FilterParams params) {
         n.title.toLowerCase().contains(params.query) ||
         n.content.toLowerCase().contains(params.query) ||
         n.tags.any((t) => t.toLowerCase().contains(params.query));
-    final matchTag = params.tag == null || n.tags.contains(params.tag);
+    final matchTag = params.tag == null ||
+        n.tags.any((t) => t == params.tag || t.startsWith('${params.tag}/'));
     return matchQuery && matchTag;
   }).toList();
 

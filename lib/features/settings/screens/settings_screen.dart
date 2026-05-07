@@ -15,6 +15,121 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final userAsync = ref.watch(authStateProvider);
+
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('Настройки'),
+        scrolledUnderElevation: 0,
+        backgroundColor: colorScheme.surface,
+        centerTitle: true,
+      ),
+      body: ListView(
+        children: [
+          _SectionTitle(title: 'СИНХРОНИЗАЦИЯ'),
+          userAsync.when(
+            data: (user) => user == null
+                ? ListTile(
+                    leading: Icon(Icons.cloud_off_rounded, color: colorScheme.primary),
+                    title: const Text('Синхронизация отключена'),
+                    subtitle: const Text('Войти через Google для сохранения данных'),
+                    onTap: () => ref.read(authServiceProvider).signInWithGoogle(),
+                  )
+                : ListTile(
+                    leading: user.photoURL != null
+                        ? CircleAvatar(radius: 16, backgroundImage: CachedNetworkImageProvider(user.photoURL!))
+                        : const CircleAvatar(radius: 16, child: Icon(Icons.person)),
+                    title: Text(user.displayName ?? 'Пользователь'),
+                    subtitle: Text(user.email ?? ''),
+                    trailing: TextButton(
+                      onPressed: () => _showSignOutDialog(context, ref),
+                      child: const Text('Выйти'),
+                    ),
+                  ),
+            loading: () => const LinearProgressIndicator(),
+            error: (e, _) => ListTile(title: Text('Ошибка: $e')),
+          ),
+          const Divider(indent: 16, endIndent: 16),
+          const SizedBox(height: 8),
+          _SettingsCategoryTile(
+            title: 'Искусственный интеллект',
+            subtitle: 'Выбор модели и API ключи',
+            icon: Icons.auto_awesome_rounded,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const _AISettings()),
+            ),
+          ),
+          _SettingsCategoryTile(
+            title: 'Оформление',
+            subtitle: 'Тема приложения и цвета',
+            icon: Icons.palette_outlined,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const _AppearanceSettings()),
+            ),
+          ),
+          _SettingsCategoryTile(
+            title: 'Данные и хранилище',
+            subtitle: 'Архив событий и корзина',
+            icon: Icons.storage_rounded,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const _DataSettings()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsCategoryTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _SettingsCategoryTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: scheme.primary, size: 24),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+      onTap: onTap,
+    );
+  }
+}
+
+// --- SUB-SCREENS ---
+
+class _AISettings extends ConsumerStatefulWidget {
+  const _AISettings();
+  @override
+  ConsumerState<_AISettings> createState() => _AISettingsState();
+}
+
+class _AISettingsState extends ConsumerState<_AISettings> {
   late TextEditingController _apiKeyCtrl;
   bool _obscureKey = true;
 
@@ -32,65 +147,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentTheme = ref.watch(themeModeProvider);
-    final currentAccent = ref.watch(accentColorProvider);
     final currentModel = ref.watch(aiModelProvider);
     final useFallbackKey = ref.watch(useFallbackApiKeyProvider);
-    final userAsync = ref.watch(authStateProvider);
-    final colorScheme = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('Настройки'),
-        scrolledUnderElevation: 0,
-        backgroundColor: colorScheme.surface,
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Искусственный интеллект')),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
         children: [
-          _SectionTitle(title: 'АККАУНТ'),
-          userAsync.when(
-            data: (user) => user == null
-                ? ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: colorScheme.primaryContainer,
-                      child: Icon(Icons.cloud_sync_rounded, color: colorScheme.onPrimaryContainer),
-                    ),
-                    title: const Text('Включить синхронизацию'),
-                    subtitle: const Text('Войти через Google'),
-                    onTap: () => ref.read(authServiceProvider).signInWithGoogle(),
-                  )
-                : ListTile(
-                    leading: user.photoURL != null
-                        ? CircleAvatar(backgroundImage: CachedNetworkImageProvider(user.photoURL!))
-                        : CircleAvatar(
-                            backgroundColor: colorScheme.primaryContainer,
-                            child: Icon(Icons.person, color: colorScheme.onPrimaryContainer),
-                          ),
-                    title: Text(user.displayName ?? 'Пользователь'),
-                    subtitle: Text(user.email ?? ''),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.logout_rounded),
-                      tooltip: 'Выйти',
-                      onPressed: () => _showSignOutDialog(context, ref),
-                    ),
-                  ),
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: CircularProgressIndicator(),
-              ),
-            ),
-            error: (e, _) => Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('Ошибка: $e', style: TextStyle(color: colorScheme.error)),
-            ),
-          ),
-          const Divider(height: 32),
-          _SectionTitle(title: 'ИСКУССТВЕННЫЙ ИНТЕЛЛЕКТ'),
+          _SectionTitle(title: 'ВЫБОР МОДЕЛИ'),
           _ModelTile(
             model: AIModel.gemini,
             title: 'Gemini',
@@ -112,142 +177,108 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             statusLabel: 'В РАЗРАБОТКЕ',
             onTap: null,
           ),
-          const SizedBox(height: 16),
+          const Divider(),
+          _SectionTitle(title: 'API КЛЮЧ'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: useFallbackKey 
-                    ? colorScheme.primaryContainer.withValues(alpha: 0.2) 
-                    : colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: useFallbackKey ? colorScheme.primary : colorScheme.outlineVariant,
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Использовать свой ключ',
-                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      'Для прямого доступа к API Studio',
-                      style: tt.bodySmall,
-                    ),
-                    secondary: Icon(Icons.vpn_key_rounded, color: useFallbackKey ? colorScheme.primary : null),
-                    value: useFallbackKey,
-                    onChanged: (val) async {
-                      ref.read(useFallbackApiKeyProvider.notifier).state = val;
-                      await ref.read(settingsServiceProvider).saveUseFallbackApiKey(val);
-                    },
-                  ),
-                  if (useFallbackKey) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _apiKeyCtrl,
-                      obscureText: _obscureKey,
-                      decoration: InputDecoration(
-                        hintText: 'Введите ваш API ключ',
-                        isDense: true,
-                        fillColor: colorScheme.surface,
-                        filled: true,
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
-                          onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onChanged: (val) async {
-                        ref.read(fallbackApiKeyProvider.notifier).state = val.isEmpty ? null : val;
-                        await ref.read(settingsServiceProvider).saveFallbackApiKey(val);
-                      },
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const Divider(height: 32),
-          _SectionTitle(title: 'ДАННЫЕ'),
-          ListTile(
-            leading: Icon(Icons.inventory_2_rounded, color: colorScheme.primary),
-            title: const Text('Архив событий'),
-            subtitle: const Text('Выполненные события собраны здесь'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ArchiveScreen()),
-            ),
-          ),
-          ListTile(
-            leading: Icon(Icons.delete_rounded, color: colorScheme.primary),
-            title: const Text('Корзина'),
-            subtitle: const Text('Удалённые заметки'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TrashScreen()),
-            ),
-          ),
-          const Divider(height: 32),
-          _SectionTitle(title: 'ОФОРМЛЕНИЕ'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Тема', style: tt.titleMedium),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: SegmentedButton<ThemeMode>(
-                    segments: const [
-                      ButtonSegment(value: ThemeMode.system, label: Text('Авто')),
-                      ButtonSegment(value: ThemeMode.light, label: Text('Светлая')),
-                      ButtonSegment(value: ThemeMode.dark, label: Text('Тёмная')),
-                    ],
-                    selected: {currentTheme},
-                    onSelectionChanged: (vals) async {
-                      final value = vals.first;
-                      ref.read(themeModeProvider.notifier).state = value;
-                      await ref.read(settingsServiceProvider).saveThemeIndex(value.index);
-                    },
-                    showSelectedIcon: true,
-                  ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Свой API ключ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Для прямого доступа к Google AI Studio'),
+                  value: useFallbackKey,
+                  onChanged: (val) async {
+                    ref.read(useFallbackApiKeyProvider.notifier).state = val;
+                    await ref.read(settingsServiceProvider).saveUseFallbackApiKey(val);
+                  },
                 ),
-                const SizedBox(height: 24),
-                Text('Акцентный цвет', style: tt.titleMedium),
-                const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _ColorSwatch(
-                        color: colorScheme.primary,
-                        isSelected: currentAccent == null,
-                        isSystem: true,
-                        onTap: () => _setAccentColor(ref, null),
+                if (useFallbackKey) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _apiKeyCtrl,
+                    obscureText: _obscureKey,
+                    decoration: InputDecoration(
+                      hintText: 'Введите API ключ',
+                      isDense: true,
+                      filled: true,
+                      fillColor: scheme.surfaceContainerLow,
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _obscureKey = !_obscureKey),
                       ),
-                      const SizedBox(width: 12),
-                      ..._accentColors.map(
-                        (choice) => Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: _ColorSwatch(
-                            color: choice.color,
-                            isSelected: currentAccent == choice.color.toARGB32(),
-                            onTap: () => _setAccentColor(ref, choice.color.toARGB32()),
-                          ),
-                        ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
-                    ],
+                    ),
+                    onChanged: (val) async {
+                      ref.read(fallbackApiKeyProvider.notifier).state = val.isEmpty ? null : val;
+                      await ref.read(settingsServiceProvider).saveFallbackApiKey(val);
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AppearanceSettings extends ConsumerWidget {
+  const _AppearanceSettings();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentTheme = ref.watch(themeModeProvider);
+    final currentAccent = ref.watch(accentColorProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Оформление')),
+      body: ListView(
+        children: [
+          _SectionTitle(title: 'ТЕМА ПРИЛОЖЕНИЯ'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(value: ThemeMode.system, label: Text('Авто')),
+                ButtonSegment(value: ThemeMode.light, label: Text('Светлая')),
+                ButtonSegment(value: ThemeMode.dark, label: Text('Тёмная')),
+              ],
+              selected: {currentTheme},
+              onSelectionChanged: (vals) async {
+                final value = vals.first;
+                ref.read(themeModeProvider.notifier).state = value;
+                await ref.read(settingsServiceProvider).saveThemeIndex(value.index);
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+          _SectionTitle(title: 'ЦВЕТОВОЙ АКЦЕНТ'),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _ColorSwatch(
+                  color: scheme.primary,
+                  isSelected: currentAccent == null,
+                  isSystem: true,
+                  onTap: () => _setAccentColor(ref, null),
+                ),
+                const SizedBox(width: 12),
+                ..._accentColors.map(
+                  (choice) => Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: _ColorSwatch(
+                      color: choice.color,
+                      isSelected: currentAccent == choice.color.toARGB32(),
+                      onTap: () => _setAccentColor(ref, choice.color.toARGB32()),
+                    ),
                   ),
                 ),
               ],
@@ -262,30 +293,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.read(accentColorProvider.notifier).state = colorValue;
     await ref.read(settingsServiceProvider).saveAccentColor(colorValue);
   }
+}
 
-  void _showSignOutDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.logout_rounded),
-        title: const Text('Выйти из аккаунта?'),
-        content: const Text('Вы больше не сможете синхронизировать свои данные, пока не войдете снова.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
+class _DataSettings extends StatelessWidget {
+  const _DataSettings();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Данные и хранилище')),
+      body: ListView(
+        children: [
+          ListTile(
+            leading: Icon(Icons.inventory_2_rounded, color: scheme.primary),
+            title: const Text('Архив событий'),
+            subtitle: const Text('Завершенные задачи и события'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ArchiveScreen()),
+            ),
           ),
-          FilledButton.tonal(
-            onPressed: () {
-              ref.read(authServiceProvider).signOut();
-              Navigator.pop(ctx);
-            },
-            child: const Text('Выйти'),
+          ListTile(
+            leading: Icon(Icons.delete_rounded, color: scheme.primary),
+            title: const Text('Корзина'),
+            subtitle: const Text('Удаленные заметки'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TrashScreen()),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+void _showSignOutDialog(BuildContext context, WidgetRef ref) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(Icons.logout_rounded),
+      title: const Text('Выйти из аккаунта?'),
+      content: const Text('Синхронизация будет приостановлена.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+        FilledButton.tonal(
+          onPressed: () {
+            ref.read(authServiceProvider).signOut();
+            Navigator.pop(ctx);
+          },
+          child: const Text('Выйти'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ModelTile extends StatelessWidget {

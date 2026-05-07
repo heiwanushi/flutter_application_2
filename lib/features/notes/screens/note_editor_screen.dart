@@ -19,11 +19,8 @@ import '../providers/notes_provider.dart';
 import '../providers/notes_filters_provider.dart';
 import '../providers/note_editor_provider.dart';
 import '../providers/contacts_provider.dart';
-import '../widgets/editor/editor_event_section.dart';
 import '../widgets/editor/editor_gallery.dart';
-import '../widgets/editor/editor_toolbar.dart';
 import '../widgets/editor/editor_app_bar.dart';
-import '../widgets/editor/editor_ai_menu.dart';
 import '../widgets/editor/editor_meta_chips.dart';
 import '../widgets/editor/ai_assembly_result_dialog.dart';
 
@@ -112,6 +109,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       }
 
       final syncResult = await calendarService.upsertNoteEvent(savedNote);
+      
+      // Обновляем состояние редактора, чтобы при следующем сохранении (без закрытия) не создавался дубликат
+      ref.read(noteEditorProvider(widget.note).notifier).updateCalendarMeta(
+        syncResult.calendarId, 
+        syncResult.eventId,
+      );
+
       await notifier.updateCalendarEventMeta(
         savedNote.id,
         calendarId: syncResult.calendarId,
@@ -180,13 +184,125 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
-  void _showSettingsDialog() {
+  void _showColorDialog() {
+    final notifier = ref.read(noteEditorProvider(widget.note).notifier);
+    final state = ref.read(noteEditorProvider(widget.note));
+    final scheme = Theme.of(context).colorScheme;
+
     showDialog(
       context: context,
-      builder: (context) {
-        return _EditorSettingsDialog(note: widget.note, tagCtrl: _tagCtrl, onPickEvent: _pickEventDateTime);
-      },
+      builder: (ctx) => AlertDialog(
+        title: const Text('Цвет заметки'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: GridView.builder(
+            shrinkWrap: true,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 2.5,
+            ),
+            itemCount: NoteColors.count,
+            itemBuilder: (ctx, i) {
+              final color = NoteColors.bg(i, Theme.of(context).brightness);
+              final isSelected = state.colorIndex == i;
+              return InkWell(
+                onTap: () {
+                  notifier.updateColor(i);
+                  Navigator.pop(ctx);
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(12),
+                    border: isSelected ? Border.all(color: scheme.primary, width: 2) : null,
+                  ),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    NoteColors.categoryNames[i] ?? '',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              notifier.updateColor(null);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Сбросить цвет'),
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть')),
+        ],
+      ),
     );
+  }
+
+  void _showAddTagDialog() {
+    final notifier = ref.read(noteEditorProvider(widget.note).notifier);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Добавить тег'),
+        content: TextField(
+          controller: _tagCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Название тега'),
+          onSubmitted: (val) {
+            if (val.trim().isNotEmpty) {
+              notifier.addTag(val.trim());
+              _tagCtrl.clear();
+            }
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          FilledButton(
+            onPressed: () {
+              if (_tagCtrl.text.trim().isNotEmpty) {
+                notifier.addTag(_tagCtrl.text.trim());
+                _tagCtrl.clear();
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Добавить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addContact() async {
+    final notifier = ref.read(noteEditorProvider(widget.note).notifier);
+    final status = await Permission.contacts.request();
+    if (status.isGranted) {
+      if (!mounted) return;
+      final contactId = await fc.FlutterContacts.native.showPicker();
+      if (contactId != null) {
+        final fullContact = await fc.FlutterContacts.get(
+          contactId,
+          properties: {fc.ContactProperty.name, fc.ContactProperty.phone},
+        );
+        if (fullContact != null) {
+          final noteContact = NoteContact(
+            name: fullContact.displayName ?? 'Без имени',
+            phoneNumber: fullContact.phones.isNotEmpty ? fullContact.phones.first.number : '',
+          );
+          notifier.addContact(noteContact);
+        }
+      }
+    }
   }
 
   Future<void> _aiProcessText(Future<String?> Function() action) async {
@@ -310,6 +426,80 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
+  void _showAiToolsDialog() {
+    final state = ref.read(noteEditorProvider(widget.note));
+    final gemini = ref.read(geminiServiceProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: Row(
+          children: [
+            Icon(Icons.auto_awesome_rounded, color: scheme.primary),
+            const SizedBox(width: 12),
+            const Text('AI Инструменты'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _AiToolTile(
+              icon: Icons.auto_awesome_rounded,
+              title: 'Сборка ИИ',
+              subtitle: 'Умный анализ, теги и цвет',
+              onTap: () {
+                Navigator.pop(ctx);
+                _structurizeWithAI();
+              },
+            ),
+            _AiToolTile(
+              icon: Icons.auto_fix_high_rounded,
+              title: 'Улучшить стиль',
+              subtitle: 'Сделать текст профессиональнее',
+              onTap: () {
+                Navigator.pop(ctx);
+                _aiProcessText(() => gemini.improveText(_contentCtrl.text));
+              },
+            ),
+            _AiToolTile(
+              icon: Icons.spellcheck_rounded,
+              title: 'Грамматика',
+              subtitle: 'Исправить ошибки и пунктуацию',
+              onTap: () {
+                Navigator.pop(ctx);
+                _aiProcessText(() => gemini.checkGrammar(_contentCtrl.text));
+              },
+            ),
+            _AiToolTile(
+              icon: Icons.summarize_rounded,
+              title: 'Выжимка',
+              subtitle: 'Сократить до самого главного',
+              onTap: () {
+                Navigator.pop(ctx);
+                _aiProcessText(() => gemini.summarize(_contentCtrl.text));
+              },
+            ),
+            if (state.originalContent != null)
+              _AiToolTile(
+                icon: Icons.history_rounded,
+                title: 'Оригинал',
+                subtitle: 'Вернуться к первой версии',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showOriginalDialog();
+                },
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(noteEditorProvider(widget.note));
@@ -337,15 +527,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             await _save();
             if (context.mounted) Navigator.of(context).pop();
           },
-          onShowSettings: _showSettingsDialog,
+          onShowColorPicker: _showColorDialog,
           onDelete: _delete,
-        ),
-        floatingActionButton: EditorAiMenu(
-          note: widget.note,
-          contentCtrl: _contentCtrl,
-          onStructurize: _structurizeWithAI,
-          onProcessText: _aiProcessText,
-          onShowOriginal: _showOriginalDialog,
+          onShowAI: _showAiToolsDialog,
+          onTogglePreview: () => ref.read(noteEditorProvider(widget.note).notifier).togglePreview(),
         ),
         body: Stack(
           children: [
@@ -381,6 +566,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     tags: state.tags,
                     contacts: state.contacts,
                     scheme: scheme,
+                    onAddContact: _addContact,
+                    onAddTag: _showAddTagDialog,
+                    onPickEvent: _pickEventDateTime,
+                    onToggleCompleted: () => ref.read(noteEditorProvider(widget.note).notifier).toggleCompleted(),
                   ),
                   const SizedBox(height: 8),
                   if (state.isPreviewMode)
@@ -457,79 +646,39 @@ class _AILabel extends StatelessWidget {
   }
 }
 
-class _EditorSettingsDialog extends ConsumerWidget {
-  final Note? note;
-  final TextEditingController tagCtrl;
-  final VoidCallback onPickEvent;
+class _AiToolTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
 
-  const _EditorSettingsDialog({required this.note, required this.tagCtrl, required this.onPickEvent});
+  const _AiToolTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(noteEditorProvider(note));
-    final notifier = ref.read(noteEditorProvider(note).notifier);
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return Dialog(
-      backgroundColor: scheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      insetPadding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Параметры заметки', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 24),
-            EditorToolbar(
-              tags: state.tags,
-              tagCtrl: tagCtrl,
-              colorIndex: state.colorIndex,
-              onAddTag: notifier.addTag,
-              onRemoveTag: notifier.removeTag,
-              onColorChanged: notifier.updateColor,
-              contacts: state.contacts,
-              onAddContact: () async {
-                final status = await Permission.contacts.request();
-                if (status.isGranted) {
-                  if (!context.mounted) return;
-                  final contactId = await fc.FlutterContacts.native.showPicker();
-                  if (contactId != null) {
-                    final fullContact = await fc.FlutterContacts.get(
-                      contactId,
-                      properties: {fc.ContactProperty.name, fc.ContactProperty.phone},
-                    );
-                    if (fullContact != null) {
-                      final noteContact = NoteContact(
-                        name: fullContact.displayName ?? 'Без имени',
-                        phoneNumber: fullContact.phones.isNotEmpty ? fullContact.phones.first.number : '',
-                      );
-                      notifier.addContact(noteContact);
-                    }
-                  }
-                }
-              },
-              onRemoveContact: notifier.removeContact,
-              scheme: scheme,
-              tt: tt,
-            ),
-            const SizedBox(height: 16),
-            EditorEventSection(
-              eventAt: state.eventAt,
-              reminderMinutes: state.reminderMinutes,
-              repeatMode: state.repeatMode,
-              isCompleted: state.isCompleted,
-              onPickDateTime: onPickEvent,
-              onClear: state.eventAt == null ? null : () => notifier.setEvent(null, 10, NoteRepeatMode.none),
-              onReminderChanged: (val) => notifier.setEvent(state.eventAt, val, state.repeatMode),
-              onRepeatChanged: (val) => notifier.setEvent(state.eventAt, state.reminderMinutes, val),
-            ),
-            const SizedBox(height: 16),
-            Align(alignment: Alignment.centerRight, child: FilledButton.tonal(onPressed: () => Navigator.of(context).pop(), child: const Text('Готово'))),
-          ],
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
         ),
+        child: Icon(icon, color: scheme.primary, size: 24),
       ),
+      title: Text(title, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+      subtitle: Text(subtitle, style: tt.bodySmall),
+      onTap: onTap,
     );
   }
 }
+
+
