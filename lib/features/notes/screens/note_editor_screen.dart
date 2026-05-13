@@ -385,6 +385,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       final existingFolders = ref.read(allTagsProvider);
       final result = await gemini.structureNote(
         rawText,
+        noteDate: widget.note?.createdAt,
         userContacts: userContacts,
         existingFolders: existingFolders,
       );

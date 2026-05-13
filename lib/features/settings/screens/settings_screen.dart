@@ -37,7 +37,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     leading: Icon(Icons.cloud_off_rounded, color: colorScheme.primary),
                     title: const Text('Синхронизация отключена'),
                     subtitle: const Text('Войти через Google для сохранения данных'),
-                    onTap: () => ref.read(authServiceProvider).signInWithGoogle(),
+                    onTap: () async {
+                      try {
+                        await ref.read(authServiceProvider).signInWithGoogle();
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Ошибка входа: $e')),
+                          );
+                        }
+                      }
+                    },
                   )
                 : ListTile(
                     leading: user.photoURL != null
