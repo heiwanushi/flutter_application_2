@@ -1,9 +1,15 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/settings_service.dart';
+import '../../../data/models/note.dart';
+import '../../notes/providers/notes_provider.dart';
 import '../../notes/screens/archive_screen.dart';
 import '../../notes/screens/trash_screen.dart';
 
@@ -34,9 +40,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           userAsync.when(
             data: (user) => user == null
                 ? ListTile(
-                    leading: Icon(Icons.cloud_off_rounded, color: colorScheme.primary),
+                    leading: Icon(
+                      Icons.cloud_off_rounded,
+                      color: colorScheme.primary,
+                    ),
                     title: const Text('Синхронизация отключена'),
-                    subtitle: const Text('Войти через Google для сохранения данных'),
+                    subtitle: const Text(
+                      'Войти через Google для сохранения данных',
+                    ),
                     onTap: () async {
                       try {
                         await ref.read(authServiceProvider).signInWithGoogle();
@@ -51,8 +62,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   )
                 : ListTile(
                     leading: user.photoURL != null
-                        ? CircleAvatar(radius: 16, backgroundImage: CachedNetworkImageProvider(user.photoURL!))
-                        : const CircleAvatar(radius: 16, child: Icon(Icons.person)),
+                        ? CircleAvatar(
+                            radius: 16,
+                            backgroundImage: CachedNetworkImageProvider(
+                              user.photoURL!,
+                            ),
+                          )
+                        : const CircleAvatar(
+                            radius: 16,
+                            child: Icon(Icons.person),
+                          ),
                     title: Text(user.displayName ?? 'Пользователь'),
                     subtitle: Text(user.email ?? ''),
                     trailing: TextButton(
@@ -146,7 +165,9 @@ class _AISettingsState extends ConsumerState<_AISettings> {
   @override
   void initState() {
     super.initState();
-    _apiKeyCtrl = TextEditingController(text: ref.read(fallbackApiKeyProvider) ?? '');
+    _apiKeyCtrl = TextEditingController(
+      text: ref.read(fallbackApiKeyProvider) ?? '',
+    );
   }
 
   @override
@@ -174,7 +195,9 @@ class _AISettingsState extends ConsumerState<_AISettings> {
             isSelected: currentModel == AIModel.gemini,
             onTap: () async {
               ref.read(aiModelProvider.notifier).state = AIModel.gemini;
-              await ref.read(settingsServiceProvider).saveAIModel(AIModel.gemini);
+              await ref
+                  .read(settingsServiceProvider)
+                  .saveAIModel(AIModel.gemini);
             },
           ),
           _ModelTile(
@@ -195,12 +218,19 @@ class _AISettingsState extends ConsumerState<_AISettings> {
               children: [
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Свой API ключ', style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Для прямого доступа к Google AI Studio'),
+                  title: const Text(
+                    'Свой API ключ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Для прямого доступа к Google AI Studio',
+                  ),
                   value: useFallbackKey,
                   onChanged: (val) async {
                     ref.read(useFallbackApiKeyProvider.notifier).state = val;
-                    await ref.read(settingsServiceProvider).saveUseFallbackApiKey(val);
+                    await ref
+                        .read(settingsServiceProvider)
+                        .saveUseFallbackApiKey(val);
                   },
                 ),
                 if (useFallbackKey) ...[
@@ -214,8 +244,11 @@ class _AISettingsState extends ConsumerState<_AISettings> {
                       filled: true,
                       fillColor: scheme.surfaceContainerLow,
                       suffixIcon: IconButton(
-                        icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
-                        onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                        icon: Icon(
+                          _obscureKey ? Icons.visibility : Icons.visibility_off,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureKey = !_obscureKey),
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -223,8 +256,11 @@ class _AISettingsState extends ConsumerState<_AISettings> {
                       ),
                     ),
                     onChanged: (val) async {
-                      ref.read(fallbackApiKeyProvider.notifier).state = val.isEmpty ? null : val;
-                      await ref.read(settingsServiceProvider).saveFallbackApiKey(val);
+                      ref.read(fallbackApiKeyProvider.notifier).state =
+                          val.isEmpty ? null : val;
+                      await ref
+                          .read(settingsServiceProvider)
+                          .saveFallbackApiKey(val);
                     },
                   ),
                 ],
@@ -263,7 +299,9 @@ class _AppearanceSettings extends ConsumerWidget {
               onSelectionChanged: (vals) async {
                 final value = vals.first;
                 ref.read(themeModeProvider.notifier).state = value;
-                await ref.read(settingsServiceProvider).saveThemeIndex(value.index);
+                await ref
+                    .read(settingsServiceProvider)
+                    .saveThemeIndex(value.index);
               },
             ),
           ),
@@ -287,7 +325,8 @@ class _AppearanceSettings extends ConsumerWidget {
                     child: _ColorSwatch(
                       color: choice.color,
                       isSelected: currentAccent == choice.color.toARGB32(),
-                      onTap: () => _setAccentColor(ref, choice.color.toARGB32()),
+                      onTap: () =>
+                          _setAccentColor(ref, choice.color.toARGB32()),
                     ),
                   ),
                 ),
@@ -305,16 +344,31 @@ class _AppearanceSettings extends ConsumerWidget {
   }
 }
 
-class _DataSettings extends StatelessWidget {
+class _DataSettings extends ConsumerWidget {
   const _DataSettings();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Данные и хранилище')),
       body: ListView(
         children: [
+          ListTile(
+            leading: Icon(Icons.file_download_rounded, color: scheme.primary),
+            title: const Text('Экспорт JSON'),
+            subtitle: const Text('Сохранить заметки в JSON-файл'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _exportNotes(context, ref),
+          ),
+          ListTile(
+            leading: Icon(Icons.file_upload_rounded, color: scheme.primary),
+            title: const Text('Импорт JSON'),
+            subtitle: const Text('Загрузить заметки из JSON-файла'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _importNotes(context, ref),
+          ),
+          const Divider(indent: 16, endIndent: 16),
           ListTile(
             leading: Icon(Icons.inventory_2_rounded, color: scheme.primary),
             title: const Text('Архив событий'),
@@ -339,6 +393,90 @@ class _DataSettings extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _exportNotes(BuildContext context, WidgetRef ref) async {
+    try {
+      final notes = await ref.read(notesProvider.future);
+      final jsonString = jsonEncode(
+        notes.map((note) => note.toJson()).toList(),
+      );
+      final directory = await FilePicker.platform.getDirectoryPath();
+      if (directory == null) return;
+      final file = File(
+        '$directory/notes_${DateTime.now().toIso8601String().replaceAll(':', '-')}.json',
+      );
+      await file.writeAsString(jsonString);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Экспорт завершен')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка экспорта: $e')));
+    }
+  }
+
+  Future<void> _importNotes(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+      );
+      if (result == null || result.files.single.path == null) return;
+
+      final file = File(result.files.single.path!);
+      final raw = await file.readAsString();
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        throw const FormatException('Файл должен содержать список заметок');
+      }
+
+      final importedNotes = decoded.map((item) {
+        if (item is! Map) {
+          throw const FormatException('Каждая запись должна быть объектом');
+        }
+        return Note.fromJson(Map<String, dynamic>.from(item));
+      }).toList();
+
+      if (!context.mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Импорт заметок'),
+          content: Text(
+            'Заменить текущие заметки на ${importedNotes.length} из файла?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Импортировать'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) return;
+
+      await ref.read(notesRepositoryProvider).saveAll(importedNotes);
+      ref.invalidate(notesProvider);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Импорт завершен')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка импорта: $e')));
+    }
+  }
 }
 
 void _showSignOutDialog(BuildContext context, WidgetRef ref) {
@@ -349,7 +487,10 @@ void _showSignOutDialog(BuildContext context, WidgetRef ref) {
       title: const Text('Выйти из аккаунта?'),
       content: const Text('Синхронизация будет приостановлена.'),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Отмена'),
+        ),
         FilledButton.tonal(
           onPressed: () {
             ref.read(authServiceProvider).signOut();
@@ -397,7 +538,9 @@ class _ModelTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? scheme.primaryContainer
-              : scheme.surfaceContainerHighest.withValues(alpha: isLocked ? 0.4 : 1.0),
+              : scheme.surfaceContainerHighest.withValues(
+                  alpha: isLocked ? 0.4 : 1.0,
+                ),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Icon(
@@ -439,14 +582,16 @@ class _ModelTile extends StatelessWidget {
       subtitle: Text(
         subtitle,
         style: tt.bodySmall?.copyWith(
-          color: isLocked ? scheme.onSurface.withValues(alpha: 0.3) : scheme.onSurfaceVariant,
+          color: isLocked
+              ? scheme.onSurface.withValues(alpha: 0.3)
+              : scheme.onSurfaceVariant,
         ),
       ),
       trailing: isLocked
           ? const Icon(Icons.lock_outline_rounded, size: 20)
           : isSelected
-              ? Icon(Icons.check_circle_rounded, color: scheme.primary)
-              : null,
+          ? Icon(Icons.check_circle_rounded, color: scheme.primary)
+          : null,
       onTap: onTap,
     );
   }
@@ -464,10 +609,10 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -497,7 +642,10 @@ class _ColorSwatch extends StatelessWidget {
           color: color,
           shape: BoxShape.circle,
           border: isSystem && !isSelected
-              ? Border.all(color: Theme.of(context).colorScheme.outline, width: 1)
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.outline,
+                  width: 1,
+                )
               : null,
           boxShadow: isSelected
               ? [
@@ -505,26 +653,30 @@ class _ColorSwatch extends StatelessWidget {
                     color: color.withValues(alpha: 0.4),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ]
               : null,
         ),
         child: isSelected
             ? Icon(
                 Icons.check_rounded,
-                color: ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+                color:
+                    ThemeData.estimateBrightnessForColor(color) ==
+                        Brightness.dark
                     ? Colors.white
                     : Colors.black,
               )
             : isSystem
-                ? Icon(
-                    Icons.auto_awesome_rounded,
-                    color: ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-                        ? Colors.white
-                        : Colors.black,
-                    size: 20,
-                  )
-                : null,
+            ? Icon(
+                Icons.auto_awesome_rounded,
+                color:
+                    ThemeData.estimateBrightnessForColor(color) ==
+                        Brightness.dark
+                    ? Colors.white
+                    : Colors.black,
+                size: 20,
+              )
+            : null,
       ),
     );
   }

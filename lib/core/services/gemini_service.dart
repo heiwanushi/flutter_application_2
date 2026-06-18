@@ -225,7 +225,6 @@ $rawContent
     try {
       if (notes.isEmpty) return {};
 
-      final now = DateTime.now();
       String contactsContext = '';
       if (userContacts.isNotEmpty) {
         final simplified = userContacts

@@ -5,6 +5,7 @@ class SelectionHeader extends StatelessWidget {
   final ColorScheme scheme;
   final TextTheme tt;
   final VoidCallback onClose;
+  final VoidCallback onSelectAll;
   final VoidCallback onTogglePin;
   final Future<void> Function() onDelete;
 
@@ -14,6 +15,7 @@ class SelectionHeader extends StatelessWidget {
     required this.scheme,
     required this.tt,
     required this.onClose,
+    required this.onSelectAll,
     required this.onTogglePin,
     required this.onDelete,
   });
@@ -44,6 +46,14 @@ class SelectionHeader extends StatelessWidget {
                 style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
+            IconButton.filledTonal(
+              onPressed: onSelectAll,
+              constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+              padding: EdgeInsets.zero,
+              tooltip: 'Выбрать все',
+              icon: const Icon(Icons.select_all_rounded),
+            ),
+            const SizedBox(width: 8),
             IconButton.filledTonal(
               onPressed: onTogglePin,
               constraints: const BoxConstraints.tightFor(width: 44, height: 44),

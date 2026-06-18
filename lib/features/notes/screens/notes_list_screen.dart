@@ -37,6 +37,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
     final selectedIds = ref.watch(selectedIdsProvider);
     final isSelectionMode = selectedIds.isNotEmpty;
     final totalNotes = allNotesAsync.value?.length ?? 0;
+    final visibleIds = notesAsync.value?.map((note) => note.id).toSet() ?? const <String>{};
     void openView(Note note) => Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => NoteEditorScreen(note: note)),
@@ -47,6 +48,14 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
       ref.read(selectedIdsProvider.notifier).state = current.contains(id)
           ? ({...current}..remove(id))
           : ({...current, id});
+    }
+
+    void selectAllVisible() {
+      if (visibleIds.isEmpty) return;
+      final allVisibleSelected = visibleIds.every(selectedIds.contains);
+      ref.read(selectedIdsProvider.notifier).state = allVisibleSelected
+          ? selectedIds.difference(visibleIds)
+          : {...selectedIds, ...visibleIds};
     }
 
     final topAreaChild = SizedBox(
@@ -71,6 +80,7 @@ class _NotesListScreenState extends ConsumerState<NotesListScreen> {
                 tt: tt,
                 onClose: () =>
                     ref.read(selectedIdsProvider.notifier).state = {},
+                onSelectAll: selectAllVisible,
                 onTogglePin: () {
                   ref
                       .read(notesProvider.notifier)

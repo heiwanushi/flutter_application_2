@@ -27,7 +27,7 @@ class EditorAppBar extends ConsumerWidget implements PreferredSizeWidget {
     final notifier = ref.read(noteEditorProvider(note).notifier);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final tt = theme.textTheme;
+    
 
     return AppBar(
       backgroundColor: Colors.transparent,
@@ -40,12 +40,7 @@ class EditorAppBar extends ConsumerWidget implements PreferredSizeWidget {
           onTap: onBack,
         ),
       ),
-      title: note == null
-          ? Text(
-              'Новая заметка',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            )
-          : null,
+      title: null,
       actions: [
         _EditorIconButton(
           icon: Icons.undo_rounded,

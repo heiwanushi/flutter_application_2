@@ -72,9 +72,23 @@ class NoteCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (note.imagePaths.isNotEmpty)
-                      _NoteImage(
-                        imagePath: note.imagePaths.first,
-                        compact: compact,
+                      Stack(
+                        children: [
+                          _NoteImage(
+                            imagePath: note.imagePaths.first,
+                            compact: compact,
+                          ),
+                          if (note.imagePaths.length > 1)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: _ImageCountBadge(
+                                count: note.imagePaths.length,
+                                scheme: scheme,
+                                onImage: true,
+                              ),
+                            ),
+                        ],
                       ),
                     
                     Padding(
@@ -89,24 +103,8 @@ class NoteCard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
-                                    child: Text.rich(
-                                      TextSpan(
-                                        children: [
-                                          if (note.isAiProcessed)
-                                            WidgetSpan(
-                                              alignment: PlaceholderAlignment.middle,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(right: 6),
-                                                child: Icon(
-                                                  Icons.auto_awesome,
-                                                  size: 16,
-                                                  color: scheme.primary,
-                                                ),
-                                              ),
-                                            ),
-                                          TextSpan(text: title),
-                                        ],
-                                      ),
+                                    child: Text(
+                                      title,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: tt.titleMedium?.copyWith(
@@ -116,26 +114,9 @@ class NoteCard extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  if (note.imagePaths.length > 1) ...[
-                                    const SizedBox(width: 8),
-                                    _ImageCountBadge(
-                                      count: note.imagePaths.length,
-                                      scheme: scheme,
-                                    ),
-                                  ],
                                 ],
                               ),
-                            )
-                          else if (note.imagePaths.length > 1) ...[
-                             Align(
-                               alignment: Alignment.centerRight,
-                               child: _ImageCountBadge(
-                                 count: note.imagePaths.length,
-                                 scheme: scheme,
-                               ),
-                             ),
-                             const SizedBox(height: 8),
-                          ],
+                            ),
                           
                           if (content.isNotEmpty)
                             Text(
@@ -150,26 +131,45 @@ class NoteCard extends StatelessWidget {
                               ),
                             ),
                           
-                          if (note.isAiProcessed || note.tags.any((t) => t != 'AI') || note.contacts.isNotEmpty) ...[
+                          if (note.eventAt != null || note.tags.isNotEmpty || note.contacts.isNotEmpty) ...[
                             const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                if (note.eventAt != null)
-                                  _EventTagChip(
-                                    eventAt: note.eventAt!,
-                                    isCompleted: note.isCompleted,
-                                    scheme: scheme,
-                                  ),
-                                ...note.tags
-                                    .where((tag) => tag != 'AI')
-                                    .take(compact ? 2 : 4)
-                                    .map((tag) => _TagChip(label: tag, scheme: scheme)),
-                                ...note.contacts
-                                    .take(compact ? 1 : 3)
-                                    .map((c) => _ContactChip(contact: c, scheme: scheme)),
-                              ],
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final maxChipWidth = constraints.maxWidth;
+                                return Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (note.isAiProcessed)
+                                      _TagChip(
+                                        label: 'AI',
+                                        scheme: scheme,
+                                        maxWidth: maxChipWidth,
+                                      ),
+                                    if (note.eventAt != null)
+                                      _EventTagChip(
+                                        eventAt: note.eventAt!,
+                                        isCompleted: note.isCompleted,
+                                        scheme: scheme,
+                                      ),
+                                    ...note.tags
+                                        .where((tag) => tag != 'AI')
+                                        .take(compact ? 2 : 4)
+                                        .map((tag) => _TagChip(
+                                              label: tag,
+                                              scheme: scheme,
+                                              maxWidth: maxChipWidth,
+                                            )),
+                                    ...note.contacts
+                                        .take(compact ? 1 : 3)
+                                        .map((c) => _ContactChip(
+                                              contact: c,
+                                              scheme: scheme,
+                                              maxWidth: maxChipWidth,
+                                            )),
+                                  ],
+                                );
+                              },
                             ),
                           ],
                         ],
@@ -259,15 +259,27 @@ class _ImageFallback extends StatelessWidget {
 class _ImageCountBadge extends StatelessWidget {
   final int count;
   final ColorScheme scheme;
+  final bool onImage;
 
-  const _ImageCountBadge({required this.count, required this.scheme});
+  const _ImageCountBadge({
+    required this.count,
+    required this.scheme,
+    this.onImage = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = onImage 
+        ? Colors.black.withValues(alpha: 0.6)
+        : scheme.secondaryContainer;
+    final contentColor = onImage
+        ? Colors.white
+        : scheme.onSecondaryContainer;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -276,13 +288,13 @@ class _ImageCountBadge extends StatelessWidget {
           Icon(
             Icons.photo_library_outlined,
             size: 14,
-            color: scheme.onSecondaryContainer,
+            color: contentColor,
           ),
           const SizedBox(width: 4),
           Text(
             '$count',
             style: TextStyle(
-              color: scheme.onSecondaryContainer,
+              color: contentColor,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -296,27 +308,52 @@ class _ImageCountBadge extends StatelessWidget {
 class _TagChip extends StatelessWidget {
   final String label;
   final ColorScheme scheme;
+  final double maxWidth;
 
-  const _TagChip({required this.label, required this.scheme});
+  const _TagChip({
+    required this.label,
+    required this.scheme,
+    required this.maxWidth,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isAi = label == 'AI';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: isAi ? 6 : 10,
+        vertical: 4,
+      ),
+      constraints: BoxConstraints(maxWidth: maxWidth),
       decoration: BoxDecoration(
-        color: scheme.secondaryContainer.withValues(alpha: 0.7),
+        color: isAi
+            ? scheme.primaryContainer.withValues(alpha: 0.7)
+            : scheme.secondaryContainer.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: scheme.onSecondaryContainer,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      child: isAi
+          ? Icon(
+              Icons.auto_awesome,
+              size: 16,
+              color: scheme.primary,
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.onSecondaryContainer,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -324,13 +361,19 @@ class _TagChip extends StatelessWidget {
 class _ContactChip extends StatelessWidget {
   final NoteContact contact;
   final ColorScheme scheme;
+  final double maxWidth;
 
-  const _ContactChip({required this.contact, required this.scheme});
+  const _ContactChip({
+    required this.contact,
+    required this.scheme,
+    required this.maxWidth,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      constraints: BoxConstraints(maxWidth: maxWidth),
       decoration: BoxDecoration(
         color: scheme.tertiaryContainer.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
@@ -344,14 +387,16 @@ class _ContactChip extends StatelessWidget {
             color: scheme.tertiary,
           ),
           const SizedBox(width: 6),
-          Text(
-            contact.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: scheme.onTertiaryContainer,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              contact.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: scheme.onTertiaryContainer,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
